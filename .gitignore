@@ -1,0 +1,39 @@
+# Virtual environment
+viirs_env/
+venv/
+.venv/
+
+# Data files (too large for git)
+viirs/
+*.tif
+*.gz
+*.tiff
+
+# Shapefiles (can be re-downloaded)
+data/shapefiles/*.shp
+data/shapefiles/*.shx
+data/shapefiles/*.dbf
+data/shapefiles/*.prj
+data/shapefiles/*.cpg
+data/shapefiles/*.zip
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
