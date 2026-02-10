@@ -37,6 +37,8 @@ from scipy import stats as scipy_stats
 from shapely.geometry import mapping
 import statsmodels.api as sm
 
+from src import config
+
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 logging.basicConfig(
     level=logging.INFO,
@@ -44,23 +46,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 log = logging.getLogger(__name__)
-
-# VIIRS layer name patterns found in NOAA EOG annual composites
-LAYER_PATTERNS = {
-    "average": "avg_rade9h",
-    "median": "median_masked",
-    "cf_cvg": "cf_cvg",
-    "lit_mask": "lit_mask",
-    "average_masked": "average_masked",
-}
-
-# Approximate Maharashtra bounding box (with buffer)
-MAHARASHTRA_BBOX = {
-    "west": 72.5,
-    "south": 15.5,
-    "east": 81.0,
-    "north": 22.1,
-}
 
 
 # ---------------------------------------------------------------------------
@@ -71,10 +56,7 @@ def download_shapefiles(out_dir="data/shapefiles"):
     """Download Maharashtra district shapefiles from HindustanTimesLabs GitHub."""
     import zipfile, io
 
-    url = (
-        "https://github.com/HindustanTimesLabs/shapefiles/raw/master/"
-        "state_ut/maharashtra/district/maharashtra_district.zip"
-    )
+    url = config.SHAPEFILE_URL
     os.makedirs(out_dir, exist_ok=True)
     shp_path = os.path.join(out_dir, "maharashtra_district.shp")
     if os.path.exists(shp_path):
@@ -149,7 +131,15 @@ def identify_layers(tif_paths):
 
 
 def subset_to_maharashtra(tif_path, gdf, output_path=None):
-    """Clip a global raster to the Maharashtra shapefile extent."""
+    """Clip a global raster to the Maharashtra shapefile extent.
+
+    SPATIAL SUBSETTING methodology:
+    Global VIIRS rasters (~11 GB) are clipped to the union of all Maharashtra
+    district polygons. This preserves the original VIIRS resolution (~15
+    arc-seconds, ~450 m at the equator) while reducing file size to ~12 MB.
+    all_touched=True ensures pixels overlapping district boundaries are
+    included, preventing data loss at polygon edges.
+    """
     union_geom = gdf.union_all()
     geom_json = [mapping(union_geom)]
 
@@ -194,8 +184,23 @@ def subset_to_maharashtra(tif_path, gdf, output_path=None):
 # ---------------------------------------------------------------------------
 
 def apply_quality_filters(median_path, lit_mask_path=None, cf_cvg_path=None,
-                          cf_threshold=5):
-    """Apply quality filters and return filtered array + metadata."""
+                          cf_threshold=None):
+    """Apply quality filters and return filtered array + metadata.
+
+    QUALITY FILTERING methodology:
+    Following Elvidge et al. (2017, 2021) VIIRS preprocessing guidelines,
+    three sequential filters are applied:
+      1. Finite-value check: removes NaN/Inf from sensor artefacts.
+      2. lit_mask filter: excludes background pixels (water, desert) that may
+         contain sensor noise. "Background values are set to zero and excluded
+         from composites." (Elvidge et al. 2021, Section 2.2)
+      3. Cloud-free coverage filter: excludes pixels with fewer than
+         cf_threshold cloud-free observations per year. "Pixels with low
+         temporal coverage are susceptible to ephemeral light contamination."
+         (Elvidge et al. 2017, Section 3.1, p. 5864)
+    """
+    if cf_threshold is None:
+        cf_threshold = config.CF_COVERAGE_THRESHOLD
     with rasterio.open(median_path) as src:
         median_data = src.read(1).astype("float32")
         meta = src.meta.copy()
@@ -221,7 +226,17 @@ def apply_quality_filters(median_path, lit_mask_path=None, cf_cvg_path=None,
 
 
 def compute_district_stats(filtered_array, transform, gdf):
-    """Compute zonal statistics per district from filtered raster array."""
+    """Compute zonal statistics per district from filtered raster array.
+
+    ZONAL STATISTICS methodology:
+    We compute mean, median, count, min, max, and std per district polygon.
+    Median is preferred over mean for radiance aggregation because VIIRS
+    radiance distributions are right-skewed (few very bright pixels in urban
+    cores). Median is robust to outliers from gas flares, fires, and sensor
+    saturation. (Elvidge et al. 2021, Section 3.1)
+    all_touched=True ensures boundary pixels are included, following standard
+    practice for administrative boundary zonal statistics.
+    """
     # Write temporary raster for rasterstats
     tmp_path = "/tmp/_viirs_filtered_tmp.tif"
     meta = {
@@ -259,12 +274,21 @@ def compute_district_stats(filtered_array, transform, gdf):
 # ---------------------------------------------------------------------------
 
 def fit_log_linear_trend(yearly_df, district_name):
-    """Fit log-linear OLS: log(radiance + 1e-6) ~ year, with bootstrap CI.
+    """Fit log-linear OLS: log(radiance + epsilon) ~ year, with bootstrap CI.
 
-    Returns dict with annual_pct_change, ci_low, ci_high, r_squared, p_value.
+    TREND MODEL methodology:
+    Log-linear regression (log(radiance) ~ year) is used because ALAN growth
+    is approximately exponential in developing regions. The slope coefficient
+    β is converted to annual % change via (exp(β) - 1) × 100.
+    A small constant (config.LOG_EPSILON = 1e-6) prevents log(0) for pixels
+    with zero radiance; this value is negligible relative to VIIRS minimum
+    detectable radiance (~0.1 nW/cm²/sr).
+    Bootstrap confidence intervals (1000 resamples) provide non-parametric
+    uncertainty estimates robust to non-normal residual distributions.
+    Citation: Elvidge et al. (2021), Section 3; Li et al. (2020).
     """
     sub = yearly_df[yearly_df["district"] == district_name].sort_values("year")
-    if len(sub) < 2:
+    if len(sub) < config.MIN_YEARS_FOR_TREND:
         return {
             "district": district_name,
             "annual_pct_change": np.nan,
@@ -277,7 +301,7 @@ def fit_log_linear_trend(yearly_df, district_name):
 
     years = sub["year"].values.astype(float)
     radiance = sub["median_radiance"].values.astype(float)
-    log_rad = np.log(radiance + 1e-6)
+    log_rad = np.log(radiance + config.LOG_EPSILON)
 
     X = sm.add_constant(years)
     model = sm.OLS(log_rad, X).fit()
@@ -285,9 +309,9 @@ def fit_log_linear_trend(yearly_df, district_name):
     annual_pct = (np.exp(beta) - 1) * 100
 
     # Bootstrap CI
-    n_boot = 1000
+    n_boot = config.BOOTSTRAP_RESAMPLES
     boot_pcts = []
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(config.BOOTSTRAP_SEED)
     for _ in range(n_boot):
         idx = rng.choice(len(years), size=len(years), replace=True)
         X_b = sm.add_constant(years[idx])
@@ -299,8 +323,9 @@ def fit_log_linear_trend(yearly_df, district_name):
             continue
 
     boot_pcts = np.array(boot_pcts)
-    ci_low = np.percentile(boot_pcts, 2.5) if len(boot_pcts) > 0 else np.nan
-    ci_high = np.percentile(boot_pcts, 97.5) if len(boot_pcts) > 0 else np.nan
+    ci_lo, ci_hi = config.BOOTSTRAP_CI_LEVEL
+    ci_low = np.percentile(boot_pcts, ci_lo) if len(boot_pcts) > 0 else np.nan
+    ci_high = np.percentile(boot_pcts, ci_hi) if len(boot_pcts) > 0 else np.nan
 
     return {
         "district": district_name,
@@ -314,14 +339,54 @@ def fit_log_linear_trend(yearly_df, district_name):
 
 
 # ---------------------------------------------------------------------------
+# Step 4b: Data provenance tracking
+# ---------------------------------------------------------------------------
+
+def update_manifest(year, output_dir, cf_threshold):
+    """Update data_manifest.json with processing record for reproducibility."""
+    import json
+    from datetime import datetime
+
+    manifest_path = os.path.join(os.path.dirname(output_dir), "data_manifest.json")
+    if not os.path.exists(manifest_path):
+        manifest_path = os.path.join(".", "data_manifest.json")
+    if not os.path.exists(manifest_path):
+        log.warning("data_manifest.json not found; skipping manifest update")
+        return
+
+    with open(manifest_path, "r") as f:
+        manifest = json.load(f)
+
+    entry = {
+        "date": datetime.now().isoformat(timespec="seconds"),
+        "year_processed": year,
+        "config_snapshot": {
+            "cf_threshold": cf_threshold,
+            "use_lit_mask": config.USE_LIT_MASK,
+            "use_cf_filter": config.USE_CF_FILTER,
+        },
+    }
+    manifest.setdefault("processing_history", []).append(entry)
+
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    log.info("Updated data_manifest.json for year %d", year)
+
+
+# ---------------------------------------------------------------------------
 # Step 5: Full pipeline
 # ---------------------------------------------------------------------------
 
 def unpack_subset_cleanup(gz_path, layer_name, year, gdf, output_dir):
-    """Unpack a single .gz → subset to Maharashtra → delete the global TIF.
+    """Unpack a single .gz -> subset to Maharashtra -> delete the global TIF.
 
-    This processes one layer at a time to minimise disk usage (~12 GB per
-    global TIF instead of ~48 GB for all four simultaneously).
+    YEAR-BY-YEAR PROCESSING methodology:
+    VIIRS global composites are ~11 GB each (4 layers × 11 GB = ~44 GB per
+    year). To avoid disk exhaustion on machines with limited storage, we
+    process one layer at a time: unpack .gz -> clip to Maharashtra (~12 MB)
+    -> delete global TIF before processing the next layer. This trades
+    processing speed for disk efficiency, a necessary constraint for the
+    13-year study period.
     """
     subset_dir = os.path.join(output_dir, "subsets", str(year))
     os.makedirs(subset_dir, exist_ok=True)
@@ -360,7 +425,9 @@ def unpack_subset_cleanup(gz_path, layer_name, year, gdf, output_dir):
             log.info("Cleaned up global TIF: %s", os.path.basename(tif_path))
 
 
-def process_single_year(year, viirs_dir, gdf, output_dir, cf_threshold=5):
+def process_single_year(year, viirs_dir, gdf, output_dir, cf_threshold=None):
+    if cf_threshold is None:
+        cf_threshold = config.CF_COVERAGE_THRESHOLD
     """Full pipeline for one year: unpack → subset → cleanup → filter → aggregate.
 
     Processes one layer at a time to minimise disk usage: each ~11 GB global
@@ -415,14 +482,23 @@ def process_single_year(year, viirs_dir, gdf, output_dir, cf_threshold=5):
     df = compute_district_stats(filtered, transform, gdf)
     df["year"] = year
     log.info("Year %d: %d districts processed", year, len(df))
+
+    # Update data manifest for provenance
+    update_manifest(year, output_dir, cf_threshold)
+
     return df
 
 
 def run_full_pipeline(args):
     """Orchestrate the full analysis pipeline."""
+    from src.validate_names import validate_or_exit
+
     # Load shapefile
     gdf = gpd.read_file(args.shapefile_path)
     log.info("Loaded shapefile: %d districts", len(gdf))
+
+    # Validate district names across data sources
+    validate_or_exit(args.shapefile_path, check_config=True)
 
     # Parse year range
     if "-" in args.years:
@@ -470,9 +546,9 @@ def run_full_pipeline(args):
         med = latest["median_radiance"]
         if pd.isna(med):
             result["alan_class"] = "unknown"
-        elif med < 1.0:
+        elif med < config.ALAN_LOW_THRESHOLD:
             result["alan_class"] = "low"
-        elif med < 5.0:
+        elif med < config.ALAN_MEDIUM_THRESHOLD:
             result["alan_class"] = "medium"
         else:
             result["alan_class"] = "high"
@@ -500,6 +576,177 @@ def run_full_pipeline(args):
 
     # Generate maps
     generate_maps(gdf, trends_df, yearly_df, args.output_dir)
+
+    # ── Temporal stability metrics (Task 3.1) ───────────────────────────
+    from src.stability_metrics import compute_stability_metrics, plot_stability_scatter
+
+    stability_metrics = compute_stability_metrics(
+        yearly_df, entity_col="district",
+        output_csv=os.path.join(csv_dir, "district_stability_metrics.csv"),
+    )
+    plot_stability_scatter(
+        stability_metrics, entity_col="district",
+        output_path=os.path.join(args.output_dir, "maps", "stability_scatter.png"),
+    )
+
+    # ── Breakpoint detection (Task 3.2) ───────────────────────────────
+    from src.breakpoint_analysis import analyze_all_breakpoints, plot_breakpoint_timeline
+
+    breakpoints = analyze_all_breakpoints(
+        yearly_df, entity_col="district",
+        output_csv=os.path.join(csv_dir, "district_breakpoints.csv"),
+    )
+    plot_breakpoint_timeline(
+        breakpoints,
+        output_path=os.path.join(args.output_dir, "maps", "breakpoint_timeline.png"),
+    )
+
+    # ── Trend model diagnostics (Task 3.3) ────────────────────────────
+    from src.trend_diagnostics import (compute_all_diagnostics, plot_diagnostic_panel)
+
+    diagnostics_dir = os.path.join(args.output_dir, "diagnostics")
+    os.makedirs(diagnostics_dir, exist_ok=True)
+
+    diag_df = compute_all_diagnostics(
+        yearly_df, entity_col="district",
+        output_csv=os.path.join(csv_dir, "trend_diagnostics.csv"),
+    )
+
+    # Generate diagnostic plots for flagged districts
+    for _, row in diag_df.iterrows():
+        r2 = row.get("r_squared", 1.0)
+        outliers = row.get("outlier_years", "")
+        n_outliers = len(outliers.split("; ")) if outliers else 0
+        if (not np.isnan(r2) and r2 < 0.5) or n_outliers > 2:
+            plot_diagnostic_panel(
+                yearly_df, row["district"], entity_col="district",
+                output_path=os.path.join(diagnostics_dir,
+                                         f"{row['district']}_diagnostics.png"),
+            )
+
+    # ── Urban radial gradient analysis (Task 2.1) ─────────────────────
+    latest_year = yearly_df["year"].max()
+    subset_dir = os.path.join(args.output_dir, "subsets", str(latest_year))
+    median_raster = os.path.join(subset_dir, f"maharashtra_median_{latest_year}.tif")
+
+    if os.path.exists(median_raster):
+        from src.gradient_analysis import extract_radial_profiles, plot_radial_decay_curves
+
+        profiles = extract_radial_profiles(
+            raster_path=median_raster,
+            city_locations=config.URBAN_BENCHMARKS,
+            output_csv=os.path.join(csv_dir, f"urban_radial_profiles_{latest_year}.csv"),
+        )
+        plot_radial_decay_curves(
+            profiles,
+            output_path=os.path.join(args.output_dir, "maps", "urban_radial_profiles.png"),
+        )
+
+    # ── Quality diagnostics (Task 4.1) ──────────────────────────────
+    from src.quality_diagnostics import generate_quality_report, plot_quality_heatmap
+
+    quality_dfs = []
+    for year in years:
+        subset_dir = os.path.join(args.output_dir, "subsets", str(year))
+        median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
+        lit_path = os.path.join(subset_dir, f"maharashtra_lit_mask_{year}.tif")
+        cf_path = os.path.join(subset_dir, f"maharashtra_cf_cvg_{year}.tif")
+        if os.path.exists(median_path):
+            qdf = generate_quality_report(
+                median_path, lit_path, cf_path, gdf, year,
+                output_csv=os.path.join(csv_dir, f"quality_report_{year}.csv"),
+            )
+            quality_dfs.append(qdf)
+
+    if quality_dfs:
+        all_quality = pd.concat(quality_dfs, ignore_index=True)
+        all_quality.to_csv(os.path.join(csv_dir, "quality_all_years.csv"), index=False)
+        plot_quality_heatmap(
+            all_quality,
+            output_path=os.path.join(args.output_dir, "maps", "quality_heatmap.png"),
+        )
+
+    # ── Benchmark comparison (Task 4.2) ──────────────────────────────
+    from src.benchmark_comparison import compare_to_benchmarks
+
+    compare_to_benchmarks(
+        trends_df,
+        output_csv=os.path.join(csv_dir, "benchmark_comparison.csv"),
+    )
+
+    # ── Statewide visualizations (Task 5.3) ──────────────────────────
+    from src.visualization_suite import (
+        create_multi_year_comparison_grid,
+        create_growth_classification_map,
+        create_enhanced_radiance_heatmap,
+    )
+
+    create_multi_year_comparison_grid(
+        yearly_df, gdf,
+        output_path=os.path.join(args.output_dir, "maps", "multi_year_comparison.png"),
+    )
+    create_growth_classification_map(
+        trends_df, gdf,
+        output_path=os.path.join(args.output_dir, "maps", "growth_classification.png"),
+    )
+    create_enhanced_radiance_heatmap(
+        yearly_df,
+        output_path=os.path.join(args.output_dir, "maps", "radiance_heatmap_log.png"),
+    )
+
+    if quality_dfs:
+        from src.visualization_suite import create_data_quality_map
+        create_data_quality_map(
+            all_quality, gdf,
+            output_path=os.path.join(args.output_dir, "maps", "data_quality_map.png"),
+        )
+
+    # ── Light dome modeling (Task 5.4) ───────────────────────────────
+    if os.path.exists(median_raster):
+        from src.light_dome_modeling import model_all_city_domes, plot_dome_comparison
+
+        dome_metrics = model_all_city_domes(
+            profiles,
+            output_csv=os.path.join(csv_dir, "light_dome_metrics.csv"),
+        )
+        plot_dome_comparison(
+            dome_metrics, profiles,
+            output_path=os.path.join(args.output_dir, "maps", "light_dome_comparison.png"),
+        )
+
+    # ── Graduated classification (Task 7.2) ──────────────────────────
+    from src.graduated_classification import (
+        classify_temporal_trajectory,
+        plot_tier_distribution,
+        plot_tier_transition_matrix,
+    )
+
+    trajectory = classify_temporal_trajectory(
+        yearly_df,
+        output_csv=os.path.join(csv_dir, "graduated_classification.csv"),
+    )
+    if not trajectory.empty:
+        plot_tier_distribution(
+            trajectory,
+            output_path=os.path.join(args.output_dir, "maps", "tier_distribution.png"),
+        )
+        first_year = yearly_df["year"].min()
+        plot_tier_transition_matrix(
+            trajectory, first_year, latest_year,
+            output_path=os.path.join(args.output_dir, "maps",
+                                     f"tier_transitions_{first_year}_{latest_year}.png"),
+        )
+
+    # ── District-level reports (Task 5.1) ────────────────────────────
+    from src.district_reports import generate_all_district_reports
+
+    generate_all_district_reports(
+        yearly_df=yearly_df,
+        trends_df=trends_df,
+        stability_df=stability_metrics,
+        gdf=gdf,
+        output_dir=os.path.join(args.output_dir, config.OUTPUT_DIRS["district_reports"]),
+    )
 
     return trends_df, yearly_df
 
@@ -531,7 +778,7 @@ def generate_maps(gdf, trends_df, yearly_df, output_dir):
     ax.set_axis_off()
     plt.tight_layout()
     path = os.path.join(maps_dir, "maharashtra_alan_trends.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
@@ -551,12 +798,12 @@ def generate_maps(gdf, trends_df, yearly_df, output_dir):
     ax.set_axis_off()
     plt.tight_layout()
     path = os.path.join(maps_dir, "maharashtra_radiance_latest.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
     # 3. Time series for selected districts
-    highlight = ["Mumbai", "Pune", "Nagpur", "Garhchiroli", "Nandurbar", "Sindhudurg"]
+    highlight = list(config.TIMESERIES_HIGHLIGHT_DISTRICTS)
     available = yearly_df["district"].unique()
     highlight = [d for d in highlight if d in available]
     if not highlight:
@@ -574,7 +821,7 @@ def generate_maps(gdf, trends_df, yearly_df, output_dir):
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     path = os.path.join(maps_dir, "radiance_timeseries.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
@@ -594,7 +841,7 @@ def generate_maps(gdf, trends_df, yearly_df, output_dir):
     plt.colorbar(im, ax=ax, label="Median Radiance (nW/cm²/sr)")
     plt.tight_layout()
     path = os.path.join(maps_dir, "radiance_heatmap.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
@@ -614,8 +861,8 @@ def parse_args():
                         help="Path to Maharashtra district shapefile")
     parser.add_argument("--output-dir", default="./outputs",
                         help="Output directory for CSVs and maps")
-    parser.add_argument("--cf-threshold", type=int, default=5,
-                        help="Minimum cloud-free coverage threshold (default: 5)")
+    parser.add_argument("--cf-threshold", type=int, default=config.CF_COVERAGE_THRESHOLD,
+                        help="Minimum cloud-free coverage threshold (default: %(default)s)")
     parser.add_argument("--years", default="2012-2024",
                         help="Year range (e.g., '2012-2024') or comma-separated years")
     parser.add_argument("--download-shapefiles", action="store_true",

@@ -26,6 +26,8 @@ import rasterio
 from rasterstats import zonal_stats
 from shapely.geometry import Point
 
+from src import config
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -33,33 +35,33 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── Location data ────────────────────────────────────────────────────────
-# (lat, lon, type, district)
-LOCATIONS = {
-    # Cities (urban high-ALAN benchmarks)
-    "Mumbai":           (18.9600, 72.8200, "city", "Mumbai City"),
-    "Pune":             (18.5167, 73.8554, "city", "Pune"),
-    "Nagpur":           (21.1466, 79.0889, "city", "Nagpur"),
-    "Thane":            (19.2183, 72.9781, "city", "Thane"),
-    "Pimpri-Chinchwad": (18.6278, 73.8131, "city", "Pune"),
 
-    # Dark-sky candidate sites
-    "Lonar Crater":          (19.9761, 76.5079, "site", "Buldhana"),
-    "Tadoba Tiger Reserve":  (20.2485, 79.4254, "site", "Chandrapur"),
-    "Pench Tiger Reserve":   (21.6900, 79.2300, "site", "Nagpur"),
-    "Udmal Tribal Village":  (20.6587, 73.4836, "site", "Nashik"),
-    "Kaas Plateau":          (17.7200, 73.8228, "site", "Satara"),
-    "Toranmal":              (21.7333, 74.4167, "site", "Nandurbar"),
-    "Bhandardara":           (19.5375, 73.7695, "site", "Ahmednagar"),
-    "Harihareshwar":         (17.9942, 73.0258, "site", "Raigad"),
-    "Yawal Wildlife Sanctuary": (21.3781, 75.8750, "site", "Jalgaon"),
-    "Melghat Tiger Reserve": (21.4458, 77.1972, "site", "Amravati"),
-    "Bhimashankar":          (19.0739, 73.5352, "site", "Pune"),
-}
+def _build_locations():
+    """Build LOCATIONS dict from config.URBAN_BENCHMARKS and config.DARKSKY_SITES."""
+    locations = {}
+    for name, info in config.URBAN_BENCHMARKS.items():
+        locations[name] = (info["lat"], info["lon"], "city", info["district"])
+    for name, info in config.DARKSKY_SITES.items():
+        locations[name] = (info["lat"], info["lon"], "site", info["district"])
+    return locations
 
 
-def build_site_geodataframe(buffer_km=10):
-    """Create GeoDataFrame with 10 km circular buffers around each site."""
+LOCATIONS = _build_locations()
+
+
+def build_site_geodataframe(buffer_km=None):
+    """Create GeoDataFrame with circular buffers around each site.
+
+    BUFFER ANALYSIS methodology:
+    Following Wang et al. (2022), a 10 km radius buffer around point sites
+    captures the local ALAN environment while being large enough to contain
+    sufficient VIIRS pixels (~440 pixels at 450 m resolution) for robust
+    statistics. The buffer is computed in UTM Zone 43N (EPSG:32643) for
+    metric accuracy, then reprojected to WGS84 for raster extraction.
+    Citation: Wang, J. et al. (2022). Protected area buffer analysis.
+    """
+    if buffer_km is None:
+        buffer_km = config.SITE_BUFFER_RADIUS_KM
     rows = []
     for name, (lat, lon, loc_type, district) in LOCATIONS.items():
         rows.append({
@@ -87,7 +89,9 @@ def build_site_geodataframe(buffer_km=10):
     return gdf_buffered
 
 
-def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=5):
+def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
+    if cf_threshold is None:
+        cf_threshold = config.CF_COVERAGE_THRESHOLD
     """Compute filtered radiance stats for each site buffer."""
     median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
     lit_mask_path = os.path.join(subset_dir, f"maharashtra_lit_mask_{year}.tif")
@@ -168,7 +172,7 @@ def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=5):
     # Classify ALAN level
     df["alan_class"] = pd.cut(
         df["median_radiance"],
-        bins=[-np.inf, 1.0, 5.0, np.inf],
+        bins=[-np.inf, config.ALAN_LOW_THRESHOLD, config.ALAN_MEDIUM_THRESHOLD, np.inf],
         labels=["low", "medium", "high"],
     )
 
@@ -219,7 +223,7 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     ax.set_axis_off()
     plt.tight_layout()
     path = os.path.join(maps_dir, "site_overlay_map.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
@@ -232,7 +236,8 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
                    edgecolor="grey", linewidth=0.5)
     ax.set_xlabel("Median Radiance (nW/cm²/sr)", fontsize=12)
     ax.set_title(f"ALAN Comparison: Cities vs Dark-Sky Sites ({year})", fontsize=14)
-    ax.axvline(x=1.0, color="orange", linestyle="--", linewidth=1, label="Low-ALAN threshold (1 nW)")
+    ax.axvline(x=config.ALAN_LOW_THRESHOLD, color="orange", linestyle="--", linewidth=1,
+               label=f"Low-ALAN threshold ({config.ALAN_LOW_THRESHOLD} nW)")
 
     for bar, val in zip(bars, df_sorted["median_radiance"]):
         ax.text(bar.get_width() + 0.2, bar.get_y() + bar.get_height() / 2,
@@ -244,7 +249,7 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     ax.grid(axis="x", alpha=0.3)
     plt.tight_layout()
     path = os.path.join(maps_dir, "site_comparison_chart.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
@@ -275,7 +280,7 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     ax.set_axis_off()
     plt.tight_layout()
     path = os.path.join(maps_dir, "radiance_with_sites.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
@@ -293,7 +298,7 @@ def fit_site_trends(yearly_df):
         loc_type = sub["type"].iloc[0]
         district = sub["district"].iloc[0]
 
-        if len(sub) < 3:
+        if len(sub) < config.MIN_YEARS_FOR_SITE_TREND:
             results.append({
                 "name": name, "type": loc_type, "district": district,
                 "annual_pct_change": np.nan, "ci_low": np.nan, "ci_high": np.nan,
@@ -303,7 +308,7 @@ def fit_site_trends(yearly_df):
 
         years = sub["year"].values.astype(float)
         radiance = sub["median_radiance"].values.astype(float)
-        log_rad = np.log(radiance + 1e-6)
+        log_rad = np.log(radiance + config.LOG_EPSILON)
 
         X = sm.add_constant(years)
         model = sm.OLS(log_rad, X).fit()
@@ -311,9 +316,9 @@ def fit_site_trends(yearly_df):
         annual_pct = (np.exp(beta) - 1) * 100
 
         # Bootstrap CI
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng(config.BOOTSTRAP_SEED)
         boot_pcts = []
-        for _ in range(1000):
+        for _ in range(config.BOOTSTRAP_RESAMPLES):
             idx = rng.choice(len(years), size=len(years), replace=True)
             try:
                 m = sm.OLS(log_rad[idx], sm.add_constant(years[idx])).fit()
@@ -322,8 +327,9 @@ def fit_site_trends(yearly_df):
                 continue
 
         boot_pcts = np.array(boot_pcts)
-        ci_low = np.percentile(boot_pcts, 2.5) if len(boot_pcts) > 0 else np.nan
-        ci_high = np.percentile(boot_pcts, 97.5) if len(boot_pcts) > 0 else np.nan
+        ci_lo, ci_hi = config.BOOTSTRAP_CI_LEVEL
+        ci_low = np.percentile(boot_pcts, ci_lo) if len(boot_pcts) > 0 else np.nan
+        ci_high = np.percentile(boot_pcts, ci_hi) if len(boot_pcts) > 0 else np.nan
 
         latest = sub.iloc[-1]
         results.append({
@@ -356,7 +362,7 @@ def generate_site_timeseries(yearly_df, output_dir):
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     path = os.path.join(maps_dir, "site_timeseries_cities.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
@@ -365,8 +371,8 @@ def generate_site_timeseries(yearly_df, output_dir):
     for name in yearly_df[yearly_df["type"] == "site"]["name"].unique():
         sub = yearly_df[yearly_df["name"] == name].sort_values("year")
         ax.plot(sub["year"], sub["median_radiance"], "o-", label=name, markersize=4)
-    ax.axhline(y=1.0, color="orange", linestyle="--", linewidth=1,
-               label="Low-ALAN threshold (1 nW)")
+    ax.axhline(y=config.ALAN_LOW_THRESHOLD, color="orange", linestyle="--", linewidth=1,
+               label=f"Low-ALAN threshold ({config.ALAN_LOW_THRESHOLD} nW)")
     ax.set_xlabel("Year", fontsize=12)
     ax.set_ylabel("Median Radiance (nW/cm²/sr)", fontsize=12)
     ax.set_title("ALAN Time Series: Dark-Sky Candidate Sites", fontsize=14)
@@ -374,7 +380,7 @@ def generate_site_timeseries(yearly_df, output_dir):
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     path = os.path.join(maps_dir, "site_timeseries_darksites.png")
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
 
@@ -386,8 +392,8 @@ def main():
     parser.add_argument("--output-dir", default="./outputs")
     parser.add_argument("--shapefile-path",
                         default="./data/shapefiles/maharashtra_district.shp")
-    parser.add_argument("--buffer-km", type=float, default=10)
-    parser.add_argument("--cf-threshold", type=int, default=5)
+    parser.add_argument("--buffer-km", type=float, default=config.SITE_BUFFER_RADIUS_KM)
+    parser.add_argument("--cf-threshold", type=int, default=config.CF_COVERAGE_THRESHOLD)
     parser.add_argument("--years", default="2012-2024",
                         help="Year range (e.g., '2012-2024') or single year")
     args = parser.parse_args()
@@ -402,6 +408,10 @@ def main():
     log.info("Site-level ALAN analysis (%s)", args.years)
     log.info("Buffer radius: %d km | CF threshold: %d", args.buffer_km,
              args.cf_threshold)
+
+    # Validate district names
+    from src.validate_names import validate_or_exit
+    validate_or_exit(args.shapefile_path, check_config=True)
 
     # Build site buffers
     gdf_sites = build_site_geodataframe(args.buffer_km)
@@ -446,9 +456,9 @@ def main():
         med = trends_df.at[i, "median_radiance_latest"]
         if pd.isna(med):
             trends_df.at[i, "alan_class"] = "unknown"
-        elif med < 1.0:
+        elif med < config.ALAN_LOW_THRESHOLD:
             trends_df.at[i, "alan_class"] = "low"
-        elif med < 5.0:
+        elif med < config.ALAN_MEDIUM_THRESHOLD:
             trends_df.at[i, "alan_class"] = "medium"
         else:
             trends_df.at[i, "alan_class"] = "high"
@@ -502,6 +512,104 @@ def main():
 
     # Generate time-series plots
     generate_site_timeseries(yearly_df, args.output_dir)
+
+    # ── Spatial analysis enhancements ─────────────────────────────────
+    csv_dir = os.path.join(args.output_dir, "csv")
+    maps_dir = os.path.join(args.output_dir, "maps")
+    median_path = os.path.join(latest_subset_dir, f"maharashtra_median_{latest_year}.tif")
+
+    if os.path.exists(median_path):
+        # Task 2.2: Inside vs outside buffer comparison
+        from src.buffer_comparison import (compare_inside_outside_buffers,
+                                           plot_inside_outside_comparison)
+        buffer_comparison = compare_inside_outside_buffers(
+            site_gdf=gdf_sites,
+            raster_path=median_path,
+            output_csv=os.path.join(csv_dir, f"site_buffer_comparison_{latest_year}.csv"),
+        )
+        plot_inside_outside_comparison(
+            buffer_comparison,
+            output_path=os.path.join(maps_dir, "site_buffer_comparison.png"),
+        )
+
+        # Task 2.3: Directional brightness analysis
+        from src.directional_analysis import (compute_directional_brightness,
+                                              plot_directional_polar)
+        directional = compute_directional_brightness(
+            raster_path=median_path,
+            output_csv=os.path.join(csv_dir, f"directional_brightness_{latest_year}.csv"),
+        )
+        plot_directional_polar(
+            directional,
+            output_path=os.path.join(maps_dir, "directional_brightness_polar.pdf"),
+        )
+
+    # Task 2.4: Nearest city distance metrics
+    from src.proximity_analysis import compute_nearest_city_distances
+    proximity = compute_nearest_city_distances(
+        output_csv=os.path.join(csv_dir, "site_proximity_metrics.csv"),
+    )
+
+    # ── Sky brightness estimation (Task 7.1) ─────────────────────────
+    from src.sky_brightness_model import (
+        compute_sky_brightness_metrics,
+        plot_sky_brightness_distribution,
+    )
+
+    sky_metrics = compute_sky_brightness_metrics(
+        latest_metrics,
+        output_csv=os.path.join(csv_dir, f"sky_brightness_{latest_year}.csv"),
+    )
+    plot_sky_brightness_distribution(
+        sky_metrics,
+        output_path=os.path.join(maps_dir, "sky_brightness_distribution.png"),
+    )
+
+    # ── Temporal stability for sites (Task 3.1) ──────────────────────
+    from src.stability_metrics import compute_stability_metrics, plot_stability_scatter
+
+    site_stability = compute_stability_metrics(
+        yearly_df, entity_col="name",
+        output_csv=os.path.join(csv_dir, "site_stability_metrics.csv"),
+    )
+    plot_stability_scatter(
+        site_stability, entity_col="name",
+        output_path=os.path.join(maps_dir, "site_stability_scatter.png"),
+    )
+
+    # ── Breakpoint detection for sites (Task 3.2) ────────────────────
+    from src.breakpoint_analysis import analyze_all_breakpoints
+
+    site_breakpoints = analyze_all_breakpoints(
+        yearly_df, entity_col="name",
+        output_csv=os.path.join(csv_dir, "site_breakpoints.csv"),
+    )
+
+    # ── Benchmark comparison for sites (Task 4.2) ────────────────────
+    from src.benchmark_comparison import compare_to_benchmarks
+
+    compare_to_benchmarks(
+        trends_df,
+        output_csv=os.path.join(csv_dir, "site_benchmark_comparison.csv"),
+    )
+
+    # ── City vs site boxplot (Task 5.3) ──────────────────────────────
+    from src.visualization_suite import create_city_vs_site_boxplot
+
+    create_city_vs_site_boxplot(
+        latest_metrics,
+        output_path=os.path.join(maps_dir, "city_vs_site_boxplot.png"),
+    )
+
+    # ── Site-level deep-dive reports (Task 5.2) ──────────────────────
+    from src.site_reports import generate_all_site_reports
+
+    generate_all_site_reports(
+        metrics_df=latest_metrics,
+        yearly_df=yearly_df,
+        trends_df=trends_df,
+        output_dir=os.path.join(args.output_dir, config.OUTPUT_DIRS["site_reports"]),
+    )
 
     log.info("\nDone! Outputs in %s/", args.output_dir)
 

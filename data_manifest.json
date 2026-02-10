@@ -1,0 +1,54 @@
+{
+  "viirs_product": {
+    "source": "NOAA Earth Observation Group",
+    "url": "https://eogdata.mines.edu/nighttime_light/annual/v22/",
+    "citation": "Elvidge, C.D. et al. (2021). Annual time series of global VIIRS nighttime lights derived from monthly averages: 2012 to 2019. Remote Sensing, 13(5), 922.",
+    "version_mapping": {
+      "2012": "v21",
+      "2013": "v21",
+      "2014": "v22",
+      "2015": "v22",
+      "2016": "v22",
+      "2017": "v22",
+      "2018": "v22",
+      "2019": "v22",
+      "2020": "v22",
+      "2021": "v22",
+      "2022": "v22",
+      "2023": "v22",
+      "2024": "v22"
+    }
+  },
+  "layers": {
+    "median_masked": {
+      "description": "Median radiance with stray light correction and background masking applied",
+      "units": "nW/cm²/sr",
+      "nodata": "NaN",
+      "citation": "Elvidge, C.D. et al. (2017). VIIRS night-time lights. Int. J. Remote Sensing, 38(21), 5860-5879."
+    },
+    "average_masked": {
+      "description": "Average radiance with stray light correction and background masking applied",
+      "units": "nW/cm²/sr",
+      "nodata": "NaN",
+      "citation": "Elvidge, C.D. et al. (2017). VIIRS night-time lights. Int. J. Remote Sensing, 38(21), 5860-5879."
+    },
+    "cf_cvg": {
+      "description": "Number of cloud-free observations used in the annual composite",
+      "units": "count (0-365)",
+      "nodata": 0
+    },
+    "lit_mask": {
+      "description": "Binary mask identifying lit pixels (1) vs background pixels (0)",
+      "units": "binary (0/1)",
+      "nodata": 0
+    }
+  },
+  "shapefile": {
+    "source": "HindustanTimesLabs GitHub",
+    "url": "https://github.com/HindustanTimesLabs/shapefiles/raw/master/state_ut/maharashtra/district/maharashtra_district.zip",
+    "description": "Maharashtra district boundaries",
+    "expected_districts": 36,
+    "crs": "EPSG:4326"
+  },
+  "processing_history": []
+}

@@ -25,17 +25,7 @@ import sys
 
 import numpy as np
 
-
-# VIIRS version mapping (NOAA changed versions over time)
-YEAR_VERSION = {
-    2012: "v21", 2013: "v21",
-    2014: "v22", 2015: "v22", 2016: "v22", 2017: "v22",
-    2018: "v22", 2019: "v22", 2020: "v22", 2021: "v22",
-    2022: "v22", 2023: "v22", 2024: "v22",
-}
-
-# Layers to download per year
-LAYERS = ["average_masked", "median_masked", "cf_cvg", "lit_mask"]
+from src import config
 
 
 def generate_test_data(viirs_dir, years, shapefile_path=None):
@@ -51,8 +41,9 @@ def generate_test_data(viirs_dir, years, shapefile_path=None):
     import geopandas as gpd
 
     # Maharashtra approximate bounds
-    west, south, east, north = 72.5, 15.5, 81.0, 22.1
-    res = 0.004166667  # ~15 arc-seconds (VIIRS resolution)
+    bbox = config.MAHARASHTRA_BBOX
+    west, south, east, north = bbox["west"], bbox["south"], bbox["east"], bbox["north"]
+    res = config.VIIRS_RESOLUTION_DEG  # ~15 arc-seconds (VIIRS resolution)
     width = int((east - west) / res)
     height = int((north - south) / res)
     transform = from_bounds(west, south, east, north, width, height)
@@ -60,17 +51,7 @@ def generate_test_data(viirs_dir, years, shapefile_path=None):
     print(f"Generating test rasters: {width}x{height} pixels ({res}° resolution)")
 
     # Known city approximate locations (lon, lat) and relative brightness
-    cities = {
-        "Mumbai": (72.88, 19.08, 50.0),
-        "Pune": (73.86, 18.52, 25.0),
-        "Nagpur": (79.09, 21.15, 15.0),
-        "Nashik": (73.79, 20.00, 8.0),
-        "Aurangabad": (75.34, 19.88, 7.0),
-        "Solapur": (75.92, 17.68, 6.0),
-        "Kolhapur": (74.24, 16.70, 5.0),
-        "Thane": (72.98, 19.20, 30.0),
-        "Navi Mumbai": (73.02, 19.03, 20.0),
-    }
+    cities = config.TEST_DATA_CITIES
 
     # Load shapefile for masking if available
     mask = None
@@ -82,13 +63,13 @@ def generate_test_data(viirs_dir, years, shapefile_path=None):
         )
         print(f"Using shapefile mask: {mask.sum()} pixels inside Maharashtra")
 
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(config.BOOTSTRAP_SEED)
 
     for year in years:
         year_dir = os.path.join(viirs_dir, str(year))
         os.makedirs(year_dir, exist_ok=True)
 
-        growth_factor = 1.0 + 0.08 * (year - 2012)  # ~8% annual growth from baseline
+        growth_factor = 1.0 + config.TEST_GROWTH_RATE * (year - 2012)
 
         # Create base radiance field
         base = rng.exponential(0.3, size=(height, width)).astype("float32")
@@ -100,7 +81,8 @@ def generate_test_data(viirs_dir, years, shapefile_path=None):
 
         for city, (lon, lat, brightness) in cities.items():
             dist = np.sqrt((xx - lon)**2 + (yy - lat)**2)
-            city_light = brightness * growth_factor * np.exp(-dist**2 / (2 * 0.15**2))
+            sigma = config.TEST_GAUSSIAN_SIGMA
+            city_light = brightness * growth_factor * np.exp(-dist**2 / (2 * sigma**2))
             base += city_light.astype("float32")
 
         # Apply Maharashtra mask
@@ -108,7 +90,7 @@ def generate_test_data(viirs_dir, years, shapefile_path=None):
             base = np.where(mask, base, np.nan)
 
         # Add year-to-year noise
-        noise = rng.normal(0, 0.1, size=base.shape).astype("float32")
+        noise = rng.normal(0, config.TEST_NOISE_STD, size=base.shape).astype("float32")
         base = np.clip(base + noise, 0, None)
 
         meta = {
