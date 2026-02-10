@@ -6,14 +6,15 @@ Uses Maharashtra VIIRS subsets (already produced by viirs_process.py)
 to compute radiance metrics at sub-district resolution via 10 km buffers
 around point coordinates, then fits log-linear trends over the year range.
 
-Usage:
-    python src/site_analysis.py [--output-dir ./outputs] [--buffer-km 10]
-                                [--cf-threshold 5] [--years 2012-2024]
+Usage (run from project root):
+    python3 -m src.site_analysis [--output-dir ./outputs] [--buffer-km 10]
+                                 [--cf-threshold 5] [--years 2012-2024]
 """
 
 import argparse
 import logging
 import os
+import tempfile
 
 import geopandas as gpd
 import matplotlib
@@ -90,9 +91,9 @@ def build_site_geodataframe(buffer_km=None):
 
 
 def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
+    """Compute filtered radiance stats for each site buffer."""
     if cf_threshold is None:
         cf_threshold = config.CF_COVERAGE_THRESHOLD
-    """Compute filtered radiance stats for each site buffer."""
     median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
     lit_mask_path = os.path.join(subset_dir, f"maharashtra_lit_mask_{year}.tif")
     cf_cvg_path = os.path.join(subset_dir, f"maharashtra_cf_cvg_{year}.tif")
@@ -121,36 +122,42 @@ def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
              total_valid, cf_threshold)
 
     # Write filtered raster to temp file for zonal_stats
-    tmp_path = "/tmp/_viirs_site_filtered.tif"
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix="_viirs_site_filtered.tif")
+    os.close(tmp_fd)
     meta = {
         "driver": "GTiff", "height": filtered.shape[0], "width": filtered.shape[1],
         "count": 1, "dtype": "float32", "crs": crs, "transform": transform,
         "nodata": np.nan,
     }
-    with rasterio.open(tmp_path, "w", **meta) as dst:
-        dst.write(filtered, 1)
 
     # Also write unfiltered for pixel count comparison
-    tmp_unfilt = "/tmp/_viirs_site_unfiltered.tif"
-    unfilt = np.where(np.isfinite(median_data), median_data, np.nan)
-    with rasterio.open(tmp_unfilt, "w", **meta) as dst:
-        dst.write(unfilt, 1)
+    tmp_fd2, tmp_unfilt = tempfile.mkstemp(suffix="_viirs_site_unfiltered.tif")
+    os.close(tmp_fd2)
 
-    # Zonal stats on filtered
-    results_filt = zonal_stats(
-        gdf, tmp_path,
-        stats=["mean", "median", "count", "min", "max", "std"],
-        nodata=np.nan, all_touched=True,
-    )
-    # Zonal stats on unfiltered (for total pixel count / quality %)
-    results_unfilt = zonal_stats(
-        gdf, tmp_unfilt,
-        stats=["count"],
-        nodata=np.nan, all_touched=True,
-    )
+    try:
+        with rasterio.open(tmp_path, "w", **meta) as dst:
+            dst.write(filtered, 1)
 
-    os.remove(tmp_path)
-    os.remove(tmp_unfilt)
+        unfilt = np.where(np.isfinite(median_data), median_data, np.nan)
+        with rasterio.open(tmp_unfilt, "w", **meta) as dst:
+            dst.write(unfilt, 1)
+
+        # Zonal stats on filtered
+        results_filt = zonal_stats(
+            gdf, tmp_path,
+            stats=["mean", "median", "count", "min", "max", "std"],
+            nodata=np.nan, all_touched=True,
+        )
+        # Zonal stats on unfiltered (for total pixel count / quality %)
+        results_unfilt = zonal_stats(
+            gdf, tmp_unfilt,
+            stats=["count"],
+            nodata=np.nan, all_touched=True,
+        )
+    finally:
+        for p in [tmp_path, tmp_unfilt]:
+            if os.path.exists(p):
+                os.remove(p)
 
     df = pd.DataFrame(results_filt)
     df["name"] = gdf["name"].values
@@ -389,9 +396,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Site-level ALAN analysis (5 cities + 11 dark-sky sites)"
     )
-    parser.add_argument("--output-dir", default="./outputs")
+    parser.add_argument("--output-dir", default=config.DEFAULT_OUTPUT_DIR)
     parser.add_argument("--shapefile-path",
-                        default="./data/shapefiles/maharashtra_district.geojson")
+                        default=config.DEFAULT_SHAPEFILE_PATH)
     parser.add_argument("--buffer-km", type=float, default=config.SITE_BUFFER_RADIUS_KM)
     parser.add_argument("--cf-threshold", type=int, default=config.CF_COVERAGE_THRESHOLD)
     parser.add_argument("--years", default="2012-2024",
@@ -605,9 +612,8 @@ def main():
     from src.site_reports import generate_all_site_reports
 
     generate_all_site_reports(
-        metrics_df=latest_metrics,
+        all_site_data=latest_metrics,
         yearly_df=yearly_df,
-        trends_df=trends_df,
         output_dir=os.path.join(args.output_dir, config.OUTPUT_DIRS["site_reports"]),
     )
 

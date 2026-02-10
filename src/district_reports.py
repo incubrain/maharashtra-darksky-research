@@ -131,7 +131,7 @@ def generate_district_report(district_name, yearly_df, trends_df, stability_df,
 def generate_all_district_reports(yearly_df, trends_df, stability_df, gdf,
                                   output_dir):
     """Generate reports for all districts."""
-    report_dir = os.path.join(output_dir, "district_reports")
+    report_dir = output_dir
     os.makedirs(report_dir, exist_ok=True)
 
     districts = trends_df["district"].unique()

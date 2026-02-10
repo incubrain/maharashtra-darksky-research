@@ -6,8 +6,8 @@ Sweeps the cloud-free coverage threshold parameter and generates
 comparison plots showing how different thresholds affect district-level
 radiance statistics.
 
-Usage:
-    python scripts/run_sensitivity.py --output-dir ./outputs --year 2024 \
+Usage (run from project root):
+    python3 scripts/run_sensitivity.py --output-dir ./outputs --year 2024 \
         --shapefile-path ./data/shapefiles/maharashtra_district.geojson
 """
 

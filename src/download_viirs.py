@@ -6,16 +6,16 @@ NOAA EOG requires free registration at https://eogdata.mines.edu/products/vnl/
 After registering, you can download via browser or use this script with your
 bearer token.
 
-Usage:
+Usage (run from project root):
     # Option 1: Manual download
     # Go to https://eogdata.mines.edu/nighttime_light/annual/v22/<YEAR>/
     # Download the .tif.gz files into ./viirs/<YEAR>/
 
     # Option 2: With bearer token (after registering at eogdata.mines.edu)
-    python src/download_viirs.py --token YOUR_BEARER_TOKEN --years 2012-2024
+    python3 -m src.download_viirs --token YOUR_BEARER_TOKEN --years 2012-2024
 
     # Option 3: Generate synthetic test data for pipeline validation
-    python src/download_viirs.py --generate-test-data --years 2023-2024
+    python3 -m src.download_viirs --generate-test-data --years 2023-2024
 """
 
 import argparse
@@ -145,13 +145,13 @@ def generate_test_data(viirs_dir, years, shapefile_path=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Download/generate VIIRS data")
-    parser.add_argument("--viirs-dir", default="./viirs")
+    parser.add_argument("--viirs-dir", default=config.DEFAULT_VIIRS_DIR)
     parser.add_argument("--years", default="2012-2024")
     parser.add_argument("--token", help="NOAA EOG bearer token for download")
     parser.add_argument("--generate-test-data", action="store_true",
                         help="Generate synthetic test rasters")
     parser.add_argument("--shapefile-path",
-                        default="./data/shapefiles/maharashtra_district.geojson")
+                        default=config.DEFAULT_SHAPEFILE_PATH)
     args = parser.parse_args()
 
     if "-" in args.years:

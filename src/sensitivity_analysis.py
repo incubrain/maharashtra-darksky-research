@@ -6,6 +6,7 @@ Tests how results change with different cf_threshold and buffer_km values.
 
 import logging
 import os
+import tempfile
 
 import matplotlib
 matplotlib.use("Agg")
@@ -62,19 +63,23 @@ def run_cf_threshold_sensitivity(subset_dir, gdf, year=2024,
         valid = np.isfinite(median_data) & (lit_data > 0) & (cf_data >= cf_val)
         filtered = np.where(valid, median_data, np.nan)
 
-        tmp_path = f"/tmp/_sensitivity_cf{cf_val}.tif"
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=f"_sensitivity_cf{cf_val}.tif")
+        os.close(tmp_fd)
         meta = {
             "driver": "GTiff", "height": filtered.shape[0],
             "width": filtered.shape[1], "count": 1, "dtype": "float32",
             "crs": crs, "transform": transform, "nodata": np.nan,
         }
-        with rasterio.open(tmp_path, "w", **meta) as dst:
-            dst.write(filtered.astype("float32"), 1)
+        try:
+            with rasterio.open(tmp_path, "w", **meta) as dst:
+                dst.write(filtered.astype("float32"), 1)
 
-        stats = zonal_stats(gdf, tmp_path,
-                            stats=["mean", "median", "count"],
-                            nodata=np.nan, all_touched=True)
-        os.remove(tmp_path)
+            stats = zonal_stats(gdf, tmp_path,
+                                stats=["mean", "median", "count"],
+                                nodata=np.nan, all_touched=True)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
         for i, s in enumerate(stats):
             results.append({

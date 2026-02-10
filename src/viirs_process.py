@@ -7,10 +7,10 @@ Artificial Light at Night (ALAN) trends for Maharashtra, India.
 
 Methods follow Section 3.1 of "Preserving India's Rural Night Skies".
 
-Usage:
-    python src/viirs_process.py [--viirs-dir ./viirs] [--shapefile-path ./data/shapefiles/maharashtra_district.geojson]
-                                [--output-dir ./outputs] [--cf-threshold 5] [--years 2012-2024]
-                                [--test-district Nagpur] [--test-year 2024] [--download-data]
+Usage (run from project root):
+    python3 -m src.viirs_process [--viirs-dir ./viirs] [--shapefile-path ./data/shapefiles/maharashtra_district.geojson]
+                                 [--output-dir ./outputs] [--cf-threshold 5] [--years 2012-2024]
+                                 [--download-shapefiles]
 """
 
 import argparse
@@ -19,6 +19,7 @@ import logging
 import os
 import shutil
 import sys
+import tempfile
 import warnings
 from glob import glob
 from pathlib import Path
@@ -53,23 +54,43 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def download_shapefiles(out_dir="data/shapefiles"):
-    """Download Maharashtra district boundaries (GeoJSON)."""
-    url = config.SHAPEFILE_URL
-    os.makedirs(out_dir, exist_ok=True)
+    """Download Maharashtra district boundaries and standardise column names.
 
-    geojson_path = os.path.join(out_dir, config.SHAPEFILE_NAME)
+    Downloads GeoJSON from the configured URL, renames columns using
+    config.SHAPEFILE_COLUMN_MAP so downstream code always sees a "district"
+    column regardless of the upstream source's naming convention.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    geojson_path = os.path.join(out_dir, "maharashtra_district.geojson")
     if os.path.exists(geojson_path):
-        log.info("Boundary file already present at %s", geojson_path)
+        log.info("District boundaries already present at %s", geojson_path)
         return geojson_path
 
-    log.info("Downloading Maharashtra district boundaries (GeoJSON)...")
-    r = requests.get(url, timeout=60)
+    log.info("Downloading Maharashtra district boundaries...")
+    r = requests.get(config.SHAPEFILE_URL, allow_redirects=True, timeout=120)
     r.raise_for_status()
 
-    with open(geojson_path, "wb") as f:
-        f.write(r.content)
+    # Load into GeoDataFrame and standardise column names
+    import io as _io
+    gdf = gpd.read_file(_io.BytesIO(r.content))
 
-    log.info("Saved GeoJSON to %s", geojson_path)
+    # Apply column renaming from config (e.g. dtname → district)
+    rename_map = {k: v for k, v in config.SHAPEFILE_COLUMN_MAP.items()
+                  if k in gdf.columns}
+    gdf = gdf.rename(columns=rename_map)
+
+    if "district" not in gdf.columns:
+        raise ValueError(
+            f"After renaming, 'district' column not found. "
+            f"Columns: {list(gdf.columns)}. "
+            f"Check config.SHAPEFILE_COLUMN_MAP."
+        )
+
+    # Title-case district names for consistency
+    gdf["district"] = gdf["district"].str.strip().str.title()
+
+    log.info("Downloaded %d districts, saving to %s", len(gdf), geojson_path)
+    gdf.to_file(geojson_path, driver="GeoJSON")
     return geojson_path
 
 
@@ -112,21 +133,24 @@ def unpack_gz_files(year_dir):
 def identify_layers(tif_paths):
     """Classify TIF files into layer types based on filename patterns.
 
-    Handles NOAA EOG naming like:
+    Handles both NOAA EOG naming:
       VNL_v21_npp_2013_global_vcmcfg_c202205302300.median_masked.dat.tif
-      VNL_npp_2024_global_vcmslcfg_v2_c202502261200.cf_cvg.dat.tif
+    and simplified test data naming:
+      median_masked_2023.tif
     """
     layers = {}
     for p in tif_paths:
         basename = os.path.basename(p).lower()
-        # Check in order: most specific first to avoid false matches
-        if ".median_masked." in basename:
+        # Check in order: most specific first to avoid false matches.
+        # Use keyword-in-filename matching so both dot-delimited (NOAA)
+        # and underscore-delimited (test data) names are detected.
+        if "median_masked" in basename:
             layers["median"] = p
-        elif ".average_masked." in basename or ".avg_rade9h." in basename:
+        elif "average_masked" in basename or "avg_rade9h" in basename:
             layers["average"] = p
-        elif ".cf_cvg." in basename:
+        elif "cf_cvg" in basename:
             layers["cf_cvg"] = p
-        elif ".lit_mask." in basename:
+        elif "lit_mask" in basename:
             layers["lit_mask"] = p
     return layers
 
@@ -239,7 +263,8 @@ def compute_district_stats(filtered_array, transform, gdf):
     practice for administrative boundary zonal statistics.
     """
     # Write temporary raster for rasterstats
-    tmp_path = "/tmp/_viirs_filtered_tmp.tif"
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix="_viirs_filtered.tif")
+    os.close(tmp_fd)
     meta = {
         "driver": "GTiff",
         "height": filtered_array.shape[0],
@@ -250,23 +275,25 @@ def compute_district_stats(filtered_array, transform, gdf):
         "transform": transform,
         "nodata": np.nan,
     }
-    with rasterio.open(tmp_path, "w", **meta) as dst:
-        dst.write(filtered_array.astype("float32"), 1)
+    try:
+        with rasterio.open(tmp_path, "w", **meta) as dst:
+            dst.write(filtered_array.astype("float32"), 1)
 
-    results = zonal_stats(
-        gdf, tmp_path,
-        stats=["mean", "median", "count", "min", "max", "std"],
-        nodata=np.nan,
-        all_touched=True,
-    )
+        results = zonal_stats(
+            gdf, tmp_path,
+            stats=["mean", "median", "count", "min", "max", "std"],
+            nodata=np.nan,
+            all_touched=True,
+        )
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
     df = pd.DataFrame(results)
     df["district"] = gdf["district"].values
     df = df[["district", "mean", "median", "count", "min", "max", "std"]]
     df.columns = ["district", "mean_radiance", "median_radiance", "pixel_count",
                    "min_radiance", "max_radiance", "std_radiance"]
-
-    os.remove(tmp_path)
     return df
 
 
@@ -427,14 +454,14 @@ def unpack_subset_cleanup(gz_path, layer_name, year, gdf, output_dir):
 
 
 def process_single_year(year, viirs_dir, gdf, output_dir, cf_threshold=None):
-    if cf_threshold is None:
-        cf_threshold = config.CF_COVERAGE_THRESHOLD
     """Full pipeline for one year: unpack → subset → cleanup → filter → aggregate.
 
     Processes one layer at a time to minimise disk usage: each ~11 GB global
     TIF is unpacked, clipped to Maharashtra (~12 MB), then deleted before
     the next layer is processed.
     """
+    if cf_threshold is None:
+        cf_threshold = config.CF_COVERAGE_THRESHOLD
     year_dir = os.path.join(viirs_dir, str(year))
     if not os.path.isdir(year_dir):
         log.warning("Year directory not found: %s", year_dir)
@@ -494,25 +521,16 @@ def run_full_pipeline(args):
     """Orchestrate the full analysis pipeline."""
     from src.validate_names import validate_or_exit
 
-    # Load shapefile
+    # Load district boundaries
     gdf = gpd.read_file(args.shapefile_path)
-    log.info("Loaded shapefile: %d districts", len(gdf))
-    # ─── NORMALIZE DISTRICT COLUMN (LGD / Census-aligned) ─────────────
-    if "dtname" in gdf.columns:
-        gdf = gdf.rename(columns={"dtname": "district"})
-    else:
-        raise ValueError(
-            f"Expected 'dtname' column not found. Columns: {list(gdf.columns)}"
+    log.info("Loaded boundaries: %d districts", len(gdf))
+
+    # Validate district count matches expectations
+    if len(gdf) != config.EXPECTED_DISTRICT_COUNT:
+        log.warning(
+            "Expected %d districts but found %d in %s",
+            config.EXPECTED_DISTRICT_COUNT, len(gdf), args.shapefile_path,
         )
-
-    gdf["district"] = gdf["district"].astype(str).str.strip()
-
-    # ─── DEBUG / ONE-TIME AUDIT OUTPUT ────────────────────────────────
-    districts = sorted(gdf["district"].unique())
-
-    log.info("Loaded %d districts from shapefile:", len(districts))
-    for d in districts:
-        log.info("  - %s", d)
 
     # Validate district names across data sources
     validate_or_exit(args.shapefile_path, check_config=True)
@@ -871,12 +889,12 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Maharashtra VIIRS ALAN Trend Analysis (2012-2024)"
     )
-    parser.add_argument("--viirs-dir", default="./viirs",
+    parser.add_argument("--viirs-dir", default=config.DEFAULT_VIIRS_DIR,
                         help="Root directory containing year folders with .gz files")
     parser.add_argument("--shapefile-path",
-                        default="./data/shapefiles/maharashtra_district.geojson",
-                        help="Path to Maharashtra district shapefile")
-    parser.add_argument("--output-dir", default="./outputs",
+                        default=config.DEFAULT_SHAPEFILE_PATH,
+                        help="Path to Maharashtra district boundaries (GeoJSON)")
+    parser.add_argument("--output-dir", default=config.DEFAULT_OUTPUT_DIR,
                         help="Output directory for CSVs and maps")
     parser.add_argument("--cf-threshold", type=int, default=config.CF_COVERAGE_THRESHOLD,
                         help="Minimum cloud-free coverage threshold (default: %(default)s)")

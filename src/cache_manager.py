@@ -16,7 +16,7 @@ import pandas as pd
 log = logging.getLogger(__name__)
 
 # Default cache directory
-_DEFAULT_CACHE_DIR = os.path.join("output", ".cache")
+_DEFAULT_CACHE_DIR = os.path.join("outputs", ".cache")
 
 
 class CacheManager:

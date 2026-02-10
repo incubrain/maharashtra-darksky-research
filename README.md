@@ -15,7 +15,7 @@ Analysis of Artificial Light at Night (ALAN) trends across Maharashtra districts
 - **VIIRS DNB Annual Composites**: [NOAA Earth Observation Group](https://eogdata.mines.edu/products/vnl/)
   - Layers: `median_masked`, `average_masked`, `cf_cvg`, `lit_mask`
   - Years: 2012-2024 (v21 for 2012-2013, v22 for 2014-2024)
-- **Maharashtra District Boundaries**: [HindustanTimesLabs shapefiles](https://github.com/HindustanTimesLabs/shapefiles) (36 districts)
+- **Maharashtra District Boundaries**: [datta07/INDIAN-SHAPEFILES](https://github.com/datta07/INDIAN-SHAPEFILES) GeoJSON (36 districts)
 
 ## Methods
 
@@ -121,7 +121,7 @@ Download annual composites from [NOAA EOG](https://eogdata.mines.edu/nighttime_l
 **Option B - Synthetic test data** (for pipeline validation):
 
 ```bash
-python3 src/download_viirs.py --generate-test-data --years 2012-2024
+python3 -m src.download_viirs --generate-test-data --years 2012-2024
 ```
 
 This creates realistic synthetic rasters with urban hotspots (Mumbai, Pune, Nagpur, etc.) and a gradual 8%/yr growth trend, suitable for end-to-end pipeline testing.
@@ -129,7 +129,7 @@ This creates realistic synthetic rasters with urban hotspots (Mumbai, Pune, Nagp
 ### Step 2: Run the district-level pipeline
 
 ```bash
-python3 src/viirs_process.py --download-shapefiles
+python3 -m src.viirs_process --download-shapefiles
 ```
 
 This is the main pipeline. It processes all years (2012-2024) and runs:
@@ -143,7 +143,7 @@ This is the main pipeline. It processes all years (2012-2024) and runs:
 ### Step 3: Run the site-level pipeline
 
 ```bash
-python3 src/site_analysis.py
+python3 -m src.site_analysis
 ```
 
 Analyzes 5 urban benchmark cities and 11 dark-sky candidate sites using 10 km circular buffers:
@@ -166,19 +166,21 @@ Sweeps the cloud-free coverage threshold parameter to test result robustness.
 
 ## Quick Start (Full Pipeline with Synthetic Data)
 
+All commands must be run from the project root (`maharashtra-viirs/`) because modules use `from src import config`.
+
 ```bash
 # Install
 python3 -m venv viirs_env && source viirs_env/bin/activate
 pip install -r requirements.txt
 
 # Generate test data
-python3 src/download_viirs.py --generate-test-data --years 2012-2024
+python3 -m src.download_viirs --generate-test-data --years 2012-2024
 
 # Run district analysis
-python3 src/viirs_process.py --download-shapefiles
+python3 -m src.viirs_process --download-shapefiles
 
 # Run site analysis
-python3 src/site_analysis.py
+python3 -m src.site_analysis
 
 # (Optional) Sensitivity analysis
 python3 scripts/run_sensitivity.py --year 2024
@@ -186,23 +188,23 @@ python3 scripts/run_sensitivity.py --year 2024
 
 ## CLI Reference
 
-### `viirs_process.py`
+### `python3 -m src.viirs_process`
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--viirs-dir` | `./viirs` | Root directory with year folders |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District shapefile |
+| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District boundaries |
 | `--output-dir` | `./outputs` | Output directory |
 | `--cf-threshold` | `5` | Minimum cloud-free observations |
 | `--years` | `2012-2024` | Year range or comma-separated list |
 | `--download-shapefiles` | off | Auto-download shapefiles if missing |
 
-### `site_analysis.py`
+### `python3 -m src.site_analysis`
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--output-dir` | `./outputs` | Output directory (must match viirs_process.py) |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District shapefile |
+| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District boundaries |
 | `--buffer-km` | `10` | Buffer radius around sites (km) |
 | `--cf-threshold` | `5` | Minimum cloud-free observations |
 | `--years` | `2012-2024` | Year range |
@@ -212,18 +214,18 @@ python3 scripts/run_sensitivity.py --year 2024
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--output-dir` | `./outputs` | Output directory |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District shapefile |
+| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District boundaries |
 | `--year` | `2024` | Year to test |
 | `--thresholds` | `1,3,5,7,10` | Comma-separated CF threshold values |
 
-### `download_viirs.py`
+### `python3 -m src.download_viirs`
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--viirs-dir` | `./viirs` | Output directory for VIIRS data |
 | `--years` | `2012-2024` | Year range |
 | `--generate-test-data` | off | Generate synthetic rasters |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | Shapefile for masking test data |
+| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | Boundaries for masking test data |
 
 ## Outputs
 

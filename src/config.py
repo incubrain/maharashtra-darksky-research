@@ -77,7 +77,7 @@ ALAN_PERCENTILE_LABELS = ["Pristine", "Low", "Medium", "High", "Very High"]
 # ─── LOCATION DEFINITIONS ────────────────────────────────────────────────
 # Urban benchmarks: major Maharashtra cities for ALAN reference
 URBAN_BENCHMARKS = {
-    "Mumbai":           {"lat": 18.9600, "lon": 72.8200, "district": "Mumbai City"},
+    "Mumbai":           {"lat": 18.9600, "lon": 72.8200, "district": "Mumbai"},
     "Pune":             {"lat": 18.5167, "lon": 73.8554, "district": "Pune"},
     "Nagpur":           {"lat": 21.1466, "lon": 79.0889, "district": "Nagpur"},
     "Thane":            {"lat": 19.2183, "lon": 72.9781, "district": "Thane"},
@@ -86,7 +86,7 @@ URBAN_BENCHMARKS = {
 
 # Dark-sky candidate sites: protected areas, reserves, remote villages
 DARKSKY_SITES = {
-    "Lonar Crater":             {"lat": 19.9761, "lon": 76.5079, "district": "Buldhana",
+    "Lonar Crater":             {"lat": 19.9761, "lon": 76.5079, "district": "Buldana",
                                  "type": "crater"},
     "Tadoba Tiger Reserve":     {"lat": 20.2485, "lon": 79.4254, "district": "Chandrapur",
                                  "type": "tiger_reserve"},
@@ -100,7 +100,7 @@ DARKSKY_SITES = {
                                  "type": "hill_station"},
     "Bhandardara":              {"lat": 19.5375, "lon": 73.7695, "district": "Ahmadnagar",
                                  "type": "reservoir"},
-    "Harihareshwar":            {"lat": 17.9942, "lon": 73.0258, "district": "Raigad",
+    "Harihareshwar":            {"lat": 17.9942, "lon": 73.0258, "district": "Raigarh",
                                  "type": "coastal"},
     "Yawal Wildlife Sanctuary": {"lat": 21.3781, "lon": 75.8750, "district": "Jalgaon",
                                  "type": "wildlife_sanctuary"},
@@ -159,7 +159,7 @@ VIIRS_RESOLUTION_DEG = 0.004166667  # ~15 arc-seconds
 # ─── VISUALIZATION PARAMETERS ────────────────────────────────────────────
 MAP_DPI = 300
 TIMESERIES_HIGHLIGHT_DISTRICTS = [
-    "Mumbai", "Pune", "Nagpur", "Garhchiroli", "Nandurbar", "Sindhudurg",
+    "Mumbai", "Pune", "Nagpur", "Gadchiroli", "Nandurbar", "Sindhudurg",
 ]
 
 # ─── OUTPUT PATHS ─────────────────────────────────────────────────────────
@@ -172,10 +172,29 @@ OUTPUT_DIRS = {
     "diagnostics": "diagnostics",
 }
 
-# ─── SHAPEFILE SOURCE ─────────────────────────────────────────────────────
+# ─── BOUNDARY SOURCE ─────────────────────────────────────────────────────
+# Source: datta07/INDIAN-SHAPEFILES (modern district spellings, EPSG:4326)
 SHAPEFILE_URL = (
-    "https://raw.githubusercontent.com/datta07/INDIAN-SHAPEFILES/"
-    "master/STATES/MAHARASHTRA/MAHARASHTRA_DISTRICTS.geojson"
+    "https://raw.githubusercontent.com/datta07/INDIAN-SHAPEFILES/master/"
+    "STATES/MAHARASHTRA/MAHARASHTRA_DISTRICTS.geojson"
 )
-SHAPEFILE_NAME = "maharashtra_district.geojson"
+SHAPEFILE_FORMAT = "geojson"
+
+# Column name mapping: source GeoJSON property → standardised pipeline name.
+# The pipeline always expects a "district" column; this mapping ensures any
+# upstream source can be adapted without changing downstream code.
+SHAPEFILE_COLUMN_MAP = {
+    "dtname": "district",
+    "stname": "state",
+    "dtcode11": "district_code",
+    "stcode11": "state_code",
+    "Dist_LGD": "district_lgd",
+    "State_LGD": "state_lgd",
+}
+
 EXPECTED_DISTRICT_COUNT = 36
+
+# ─── DEFAULT PATHS ───────────────────────────────────────────────────────
+DEFAULT_SHAPEFILE_PATH = "./data/shapefiles/maharashtra_district.geojson"
+DEFAULT_VIIRS_DIR = "./viirs"
+DEFAULT_OUTPUT_DIR = "./outputs"

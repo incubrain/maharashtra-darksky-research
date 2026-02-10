@@ -148,7 +148,7 @@ def generate_all_site_reports(all_site_data, yearly_df, output_dir,
                               buffer_comparison_df=None, directional_df=None,
                               proximity_df=None):
     """Generate reports for all sites."""
-    report_dir = os.path.join(output_dir, "site_reports")
+    report_dir = output_dir
     os.makedirs(report_dir, exist_ok=True)
 
     for site_name in all_site_data["name"].unique():
