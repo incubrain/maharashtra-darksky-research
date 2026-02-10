@@ -22,13 +22,13 @@
   "layers": {
     "median_masked": {
       "description": "Median radiance with stray light correction and background masking applied",
-      "units": "nW/cm²/sr",
+      "units": "nW/cm\u00b2/sr",
       "nodata": "NaN",
       "citation": "Elvidge, C.D. et al. (2017). VIIRS night-time lights. Int. J. Remote Sensing, 38(21), 5860-5879."
     },
     "average_masked": {
       "description": "Average radiance with stray light correction and background masking applied",
-      "units": "nW/cm²/sr",
+      "units": "nW/cm\u00b2/sr",
       "nodata": "NaN",
       "citation": "Elvidge, C.D. et al. (2017). VIIRS night-time lights. Int. J. Remote Sensing, 38(21), 5860-5879."
     },
@@ -51,5 +51,123 @@
     "crs": "EPSG:4326",
     "format": "geojson"
   },
-  "processing_history": []
+  "processing_history": [
+    {
+      "date": "2026-02-10T19:34:18",
+      "year_processed": 2012,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:34:52",
+      "year_processed": 2013,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:35:29",
+      "year_processed": 2014,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:36:05",
+      "year_processed": 2015,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:36:50",
+      "year_processed": 2016,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:37:23",
+      "year_processed": 2017,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:37:54",
+      "year_processed": 2018,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:38:31",
+      "year_processed": 2019,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:39:10",
+      "year_processed": 2020,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:39:42",
+      "year_processed": 2021,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:40:15",
+      "year_processed": 2022,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:40:51",
+      "year_processed": 2023,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-10T19:41:26",
+      "year_processed": 2024,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    }
+  ]
 }
