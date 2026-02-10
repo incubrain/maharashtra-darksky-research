@@ -44,11 +44,12 @@
     }
   },
   "shapefile": {
-    "source": "HindustanTimesLabs GitHub",
-    "url": "https://github.com/HindustanTimesLabs/shapefiles/raw/master/state_ut/maharashtra/district/maharashtra_district.zip",
-    "description": "Maharashtra district boundaries",
+    "source": "datta07 / INDIAN-SHAPEFILES",
+    "url": "https://raw.githubusercontent.com/datta07/INDIAN-SHAPEFILES/master/STATES/MAHARASHTRA/MAHARASHTRA_DISTRICTS.geojson",
+    "description": "Maharashtra district boundaries (modern spellings)",
     "expected_districts": 36,
-    "crs": "EPSG:4326"
+    "crs": "EPSG:4326",
+    "format": "geojson"
   },
   "processing_history": []
 }

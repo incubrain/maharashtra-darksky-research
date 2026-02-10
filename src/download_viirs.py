@@ -151,7 +151,7 @@ def main():
     parser.add_argument("--generate-test-data", action="store_true",
                         help="Generate synthetic test rasters")
     parser.add_argument("--shapefile-path",
-                        default="./data/shapefiles/maharashtra_district.shp")
+                        default="./data/shapefiles/maharashtra_district.geojson")
     args = parser.parse_args()
 
     if "-" in args.years:

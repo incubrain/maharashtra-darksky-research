@@ -34,6 +34,8 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+tree.txt
+repomix-output.*
 
 # Jupyter
 .ipynb_checkpoints/

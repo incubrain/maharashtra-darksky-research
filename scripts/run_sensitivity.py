@@ -8,7 +8,7 @@ radiance statistics.
 
 Usage:
     python scripts/run_sensitivity.py --output-dir ./outputs --year 2024 \
-        --shapefile-path ./data/shapefiles/maharashtra_district.shp
+        --shapefile-path ./data/shapefiles/maharashtra_district.geojson
 """
 
 import argparse
@@ -40,7 +40,7 @@ def main():
     )
     parser.add_argument("--output-dir", default="./outputs")
     parser.add_argument("--shapefile-path",
-                        default="./data/shapefiles/maharashtra_district.shp")
+                        default="./data/shapefiles/maharashtra_district.geojson")
     parser.add_argument("--year", type=int, default=2024)
     parser.add_argument("--thresholds", default="1,3,5,7,10",
                         help="Comma-separated CF threshold values to test")

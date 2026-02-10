@@ -8,7 +8,7 @@ Artificial Light at Night (ALAN) trends for Maharashtra, India.
 Methods follow Section 3.1 of "Preserving India's Rural Night Skies".
 
 Usage:
-    python src/viirs_process.py [--viirs-dir ./viirs] [--shapefile-path ./data/shapefiles/maharashtra_district.shp]
+    python src/viirs_process.py [--viirs-dir ./viirs] [--shapefile-path ./data/shapefiles/maharashtra_district.geojson]
                                 [--output-dir ./outputs] [--cf-threshold 5] [--years 2012-2024]
                                 [--test-district Nagpur] [--test-year 2024] [--download-data]
 """
@@ -53,23 +53,24 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def download_shapefiles(out_dir="data/shapefiles"):
-    """Download Maharashtra district shapefiles from HindustanTimesLabs GitHub."""
-    import zipfile, io
-
+    """Download Maharashtra district boundaries (GeoJSON)."""
     url = config.SHAPEFILE_URL
     os.makedirs(out_dir, exist_ok=True)
-    shp_path = os.path.join(out_dir, "maharashtra_district.shp")
-    if os.path.exists(shp_path):
-        log.info("Shapefiles already present at %s", out_dir)
-        return shp_path
 
-    log.info("Downloading Maharashtra shapefiles...")
-    r = requests.get(url, allow_redirects=True, timeout=60)
+    geojson_path = os.path.join(out_dir, config.SHAPEFILE_NAME)
+    if os.path.exists(geojson_path):
+        log.info("Boundary file already present at %s", geojson_path)
+        return geojson_path
+
+    log.info("Downloading Maharashtra district boundaries (GeoJSON)...")
+    r = requests.get(url, timeout=60)
     r.raise_for_status()
-    z = zipfile.ZipFile(io.BytesIO(r.content))
-    z.extractall(out_dir)
-    log.info("Extracted %d files to %s", len(z.namelist()), out_dir)
-    return shp_path
+
+    with open(geojson_path, "wb") as f:
+        f.write(r.content)
+
+    log.info("Saved GeoJSON to %s", geojson_path)
+    return geojson_path
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +497,22 @@ def run_full_pipeline(args):
     # Load shapefile
     gdf = gpd.read_file(args.shapefile_path)
     log.info("Loaded shapefile: %d districts", len(gdf))
+    # ─── NORMALIZE DISTRICT COLUMN (LGD / Census-aligned) ─────────────
+    if "dtname" in gdf.columns:
+        gdf = gdf.rename(columns={"dtname": "district"})
+    else:
+        raise ValueError(
+            f"Expected 'dtname' column not found. Columns: {list(gdf.columns)}"
+        )
+
+    gdf["district"] = gdf["district"].astype(str).str.strip()
+
+    # ─── DEBUG / ONE-TIME AUDIT OUTPUT ────────────────────────────────
+    districts = sorted(gdf["district"].unique())
+
+    log.info("Loaded %d districts from shapefile:", len(districts))
+    for d in districts:
+        log.info("  - %s", d)
 
     # Validate district names across data sources
     validate_or_exit(args.shapefile_path, check_config=True)
@@ -857,7 +874,7 @@ def parse_args():
     parser.add_argument("--viirs-dir", default="./viirs",
                         help="Root directory containing year folders with .gz files")
     parser.add_argument("--shapefile-path",
-                        default="./data/shapefiles/maharashtra_district.shp",
+                        default="./data/shapefiles/maharashtra_district.geojson",
                         help="Path to Maharashtra district shapefile")
     parser.add_argument("--output-dir", default="./outputs",
                         help="Output directory for CSVs and maps")

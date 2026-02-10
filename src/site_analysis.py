@@ -391,7 +391,7 @@ def main():
     )
     parser.add_argument("--output-dir", default="./outputs")
     parser.add_argument("--shapefile-path",
-                        default="./data/shapefiles/maharashtra_district.shp")
+                        default="./data/shapefiles/maharashtra_district.geojson")
     parser.add_argument("--buffer-km", type=float, default=config.SITE_BUFFER_RADIUS_KM)
     parser.add_argument("--cf-threshold", type=int, default=config.CF_COVERAGE_THRESHOLD)
     parser.add_argument("--years", default="2012-2024",

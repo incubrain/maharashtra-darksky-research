@@ -98,7 +98,7 @@ DARKSKY_SITES = {
                                  "type": "plateau"},
     "Toranmal":                 {"lat": 21.7333, "lon": 74.4167, "district": "Nandurbar",
                                  "type": "hill_station"},
-    "Bhandardara":              {"lat": 19.5375, "lon": 73.7695, "district": "Ahmednagar",
+    "Bhandardara":              {"lat": 19.5375, "lon": 73.7695, "district": "Ahmadnagar",
                                  "type": "reservoir"},
     "Harihareshwar":            {"lat": 17.9942, "lon": 73.0258, "district": "Raigad",
                                  "type": "coastal"},
@@ -174,8 +174,8 @@ OUTPUT_DIRS = {
 
 # ─── SHAPEFILE SOURCE ─────────────────────────────────────────────────────
 SHAPEFILE_URL = (
-    "https://github.com/HindustanTimesLabs/shapefiles/raw/master/"
-    "state_ut/maharashtra/district/maharashtra_district.zip"
+    "https://raw.githubusercontent.com/datta07/INDIAN-SHAPEFILES/"
+    "master/STATES/MAHARASHTRA/MAHARASHTRA_DISTRICTS.geojson"
 )
-
+SHAPEFILE_NAME = "maharashtra_district.geojson"
 EXPECTED_DISTRICT_COUNT = 36

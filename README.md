@@ -191,7 +191,7 @@ python3 scripts/run_sensitivity.py --year 2024
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--viirs-dir` | `./viirs` | Root directory with year folders |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.shp` | District shapefile |
+| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District shapefile |
 | `--output-dir` | `./outputs` | Output directory |
 | `--cf-threshold` | `5` | Minimum cloud-free observations |
 | `--years` | `2012-2024` | Year range or comma-separated list |
@@ -202,7 +202,7 @@ python3 scripts/run_sensitivity.py --year 2024
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--output-dir` | `./outputs` | Output directory (must match viirs_process.py) |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.shp` | District shapefile |
+| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District shapefile |
 | `--buffer-km` | `10` | Buffer radius around sites (km) |
 | `--cf-threshold` | `5` | Minimum cloud-free observations |
 | `--years` | `2012-2024` | Year range |
@@ -212,7 +212,7 @@ python3 scripts/run_sensitivity.py --year 2024
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--output-dir` | `./outputs` | Output directory |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.shp` | District shapefile |
+| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District shapefile |
 | `--year` | `2024` | Year to test |
 | `--thresholds` | `1,3,5,7,10` | Comma-separated CF threshold values |
 
@@ -223,7 +223,7 @@ python3 scripts/run_sensitivity.py --year 2024
 | `--viirs-dir` | `./viirs` | Output directory for VIIRS data |
 | `--years` | `2012-2024` | Year range |
 | `--generate-test-data` | off | Generate synthetic rasters |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.shp` | Shapefile for masking test data |
+| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | Shapefile for masking test data |
 
 ## Outputs
 
