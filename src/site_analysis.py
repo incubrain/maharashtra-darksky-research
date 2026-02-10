@@ -2,13 +2,13 @@
 """
 Site-level ALAN analysis for 5 cities and 11 dark-sky candidate sites.
 
-Uses 2024 Maharashtra VIIRS subsets (already produced by viirs_process.py)
+Uses Maharashtra VIIRS subsets (already produced by viirs_process.py)
 to compute radiance metrics at sub-district resolution via 10 km buffers
-around point coordinates.
+around point coordinates, then fits log-linear trends over the year range.
 
 Usage:
     python src/site_analysis.py [--output-dir ./outputs] [--buffer-km 10]
-                                [--cf-threshold 5]
+                                [--cf-threshold 5] [--years 2012-2024]
 """
 
 import argparse
@@ -47,7 +47,7 @@ LOCATIONS = {
     "Lonar Crater":          (19.9761, 76.5079, "site", "Buldhana"),
     "Tadoba Tiger Reserve":  (20.2485, 79.4254, "site", "Chandrapur"),
     "Pench Tiger Reserve":   (21.6900, 79.2300, "site", "Nagpur"),
-    "Udmal Tribal Village":  (20.5300, 73.3900, "site", "Nashik"),
+    "Udmal Tribal Village":  (20.6587, 73.4836, "site", "Nashik"),
     "Kaas Plateau":          (17.7200, 73.8228, "site", "Satara"),
     "Toranmal":              (21.7333, 74.4167, "site", "Nandurbar"),
     "Bhandardara":           (19.5375, 73.7695, "site", "Ahmednagar"),
@@ -280,6 +280,105 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     log.info("Saved: %s", path)
 
 
+def fit_site_trends(yearly_df):
+    """Fit log-linear OLS trends per site, with bootstrap CI.
+
+    Returns DataFrame with annual_pct_change, ci_low, ci_high, r_squared, p_value.
+    """
+    import statsmodels.api as sm
+
+    results = []
+    for name in yearly_df["name"].unique():
+        sub = yearly_df[yearly_df["name"] == name].sort_values("year")
+        loc_type = sub["type"].iloc[0]
+        district = sub["district"].iloc[0]
+
+        if len(sub) < 3:
+            results.append({
+                "name": name, "type": loc_type, "district": district,
+                "annual_pct_change": np.nan, "ci_low": np.nan, "ci_high": np.nan,
+                "r_squared": np.nan, "p_value": np.nan, "n_years": len(sub),
+            })
+            continue
+
+        years = sub["year"].values.astype(float)
+        radiance = sub["median_radiance"].values.astype(float)
+        log_rad = np.log(radiance + 1e-6)
+
+        X = sm.add_constant(years)
+        model = sm.OLS(log_rad, X).fit()
+        beta = model.params[1]
+        annual_pct = (np.exp(beta) - 1) * 100
+
+        # Bootstrap CI
+        rng = np.random.default_rng(42)
+        boot_pcts = []
+        for _ in range(1000):
+            idx = rng.choice(len(years), size=len(years), replace=True)
+            try:
+                m = sm.OLS(log_rad[idx], sm.add_constant(years[idx])).fit()
+                boot_pcts.append((np.exp(m.params[1]) - 1) * 100)
+            except Exception:
+                continue
+
+        boot_pcts = np.array(boot_pcts)
+        ci_low = np.percentile(boot_pcts, 2.5) if len(boot_pcts) > 0 else np.nan
+        ci_high = np.percentile(boot_pcts, 97.5) if len(boot_pcts) > 0 else np.nan
+
+        latest = sub.iloc[-1]
+        results.append({
+            "name": name, "type": loc_type, "district": district,
+            "annual_pct_change": annual_pct, "ci_low": ci_low, "ci_high": ci_high,
+            "r_squared": model.rsquared,
+            "p_value": model.pvalues[1] if len(model.pvalues) > 1 else np.nan,
+            "n_years": len(sub),
+            "median_radiance_latest": latest["median_radiance"],
+            "mean_radiance_latest": latest["mean_radiance"],
+        })
+
+    return pd.DataFrame(results)
+
+
+def generate_site_timeseries(yearly_df, output_dir):
+    """Generate time-series plots for cities and dark-sky sites."""
+    maps_dir = os.path.join(output_dir, "maps")
+    os.makedirs(maps_dir, exist_ok=True)
+
+    # ── Cities time series ────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(12, 7))
+    for name in yearly_df[yearly_df["type"] == "city"]["name"].unique():
+        sub = yearly_df[yearly_df["name"] == name].sort_values("year")
+        ax.plot(sub["year"], sub["median_radiance"], "o-", label=name, markersize=4)
+    ax.set_xlabel("Year", fontsize=12)
+    ax.set_ylabel("Median Radiance (nW/cm²/sr)", fontsize=12)
+    ax.set_title("ALAN Time Series: Urban Benchmarks (5 Cities)", fontsize=14)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    path = os.path.join(maps_dir, "site_timeseries_cities.png")
+    fig.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    log.info("Saved: %s", path)
+
+    # ── Dark-sky sites time series ────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(14, 8))
+    for name in yearly_df[yearly_df["type"] == "site"]["name"].unique():
+        sub = yearly_df[yearly_df["name"] == name].sort_values("year")
+        ax.plot(sub["year"], sub["median_radiance"], "o-", label=name, markersize=4)
+    ax.axhline(y=1.0, color="orange", linestyle="--", linewidth=1,
+               label="Low-ALAN threshold (1 nW)")
+    ax.set_xlabel("Year", fontsize=12)
+    ax.set_ylabel("Median Radiance (nW/cm²/sr)", fontsize=12)
+    ax.set_title("ALAN Time Series: Dark-Sky Candidate Sites", fontsize=14)
+    ax.legend(fontsize=7, ncol=2, loc="upper left")
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    path = os.path.join(maps_dir, "site_timeseries_darksites.png")
+    fig.savefig(path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    log.info("Saved: %s", path)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Site-level ALAN analysis (5 cities + 11 dark-sky sites)"
@@ -289,69 +388,120 @@ def main():
                         default="./data/shapefiles/maharashtra_district.shp")
     parser.add_argument("--buffer-km", type=float, default=10)
     parser.add_argument("--cf-threshold", type=int, default=5)
-    parser.add_argument("--year", type=int, default=2024)
+    parser.add_argument("--years", default="2012-2024",
+                        help="Year range (e.g., '2012-2024') or single year")
     args = parser.parse_args()
 
-    subset_dir = os.path.join(args.output_dir, "subsets", str(args.year))
-    log.info("Site-level ALAN analysis (%d)", args.year)
-    log.info("Buffer radius: %d km", args.buffer_km)
+    # Parse year range
+    if "-" in args.years:
+        start, end = args.years.split("-")
+        years = list(range(int(start), int(end) + 1))
+    else:
+        years = [int(y) for y in args.years.split(",")]
+
+    log.info("Site-level ALAN analysis (%s)", args.years)
+    log.info("Buffer radius: %d km | CF threshold: %d", args.buffer_km,
+             args.cf_threshold)
 
     # Build site buffers
     gdf_sites = build_site_geodataframe(args.buffer_km)
 
-    # Compute metrics
-    metrics_df = compute_site_metrics(gdf_sites, subset_dir, args.year,
-                                      args.cf_threshold)
-    if metrics_df is None:
-        log.error("Failed to compute metrics. Run viirs_process.py --years %d first.",
-                  args.year)
+    # Compute metrics for each year
+    all_yearly = []
+    for year in years:
+        subset_dir = os.path.join(args.output_dir, "subsets", str(year))
+        if not os.path.isdir(subset_dir):
+            log.warning("No subsets for %d — skipping", year)
+            continue
+        df = compute_site_metrics(gdf_sites, subset_dir, year, args.cf_threshold)
+        if df is not None:
+            all_yearly.append(df)
+            log.info("Year %d: %d sites processed", year, len(df))
+
+    if not all_yearly:
+        log.error("No data processed. Run viirs_process.py first.")
         return
 
-    # Save CSV
+    yearly_df = pd.concat(all_yearly, ignore_index=True)
+    log.info("Total records: %d (%d years × %d sites)",
+             len(yearly_df), yearly_df["year"].nunique(),
+             yearly_df["name"].nunique())
+
+    # Save yearly CSV
     csv_dir = os.path.join(args.output_dir, "csv")
     os.makedirs(csv_dir, exist_ok=True)
-    csv_path = os.path.join(csv_dir, f"site_metrics_{args.year}.csv")
-    metrics_df.to_csv(csv_path, index=False)
-    log.info("Saved: %s", csv_path)
+    yearly_path = os.path.join(csv_dir, "site_yearly_radiance.csv")
+    yearly_df.to_csv(yearly_path, index=False)
+    log.info("Saved: %s", yearly_path)
+
+    # Fit trends
+    trends_df = fit_site_trends(yearly_df)
+
+    # Add ALAN classification based on latest year median
+    for i, row in trends_df.iterrows():
+        if "median_radiance_latest" not in row or pd.isna(row.get("median_radiance_latest")):
+            latest = yearly_df[(yearly_df["name"] == row["name"])].sort_values("year").iloc[-1]
+            trends_df.at[i, "median_radiance_latest"] = latest["median_radiance"]
+            trends_df.at[i, "mean_radiance_latest"] = latest["mean_radiance"]
+        med = trends_df.at[i, "median_radiance_latest"]
+        if pd.isna(med):
+            trends_df.at[i, "alan_class"] = "unknown"
+        elif med < 1.0:
+            trends_df.at[i, "alan_class"] = "low"
+        elif med < 5.0:
+            trends_df.at[i, "alan_class"] = "medium"
+        else:
+            trends_df.at[i, "alan_class"] = "high"
+
+    trends_path = os.path.join(csv_dir, "site_trends.csv")
+    trends_df.to_csv(trends_path, index=False)
+    log.info("Saved: %s", trends_path)
 
     # Print summary
     log.info("\n" + "=" * 70)
-    log.info("SITE METRICS SUMMARY (%d)", args.year)
+    log.info("SITE TREND SUMMARY (%s)", args.years)
     log.info("=" * 70)
 
-    cities_df = metrics_df[metrics_df["type"] == "city"].sort_values(
-        "median_radiance", ascending=False)
-    sites_df = metrics_df[metrics_df["type"] == "site"].sort_values(
-        "median_radiance", ascending=True)
+    cities_t = trends_df[trends_df["type"] == "city"].sort_values(
+        "annual_pct_change", ascending=False)
+    sites_t = trends_df[trends_df["type"] == "site"].sort_values(
+        "annual_pct_change", ascending=False)
 
-    log.info("\n--- CITIES (urban benchmarks) ---")
-    for _, r in cities_df.iterrows():
-        log.info("  %-20s median=%.2f  mean=%.2f  pixels=%d  quality=%.0f%%  [%s]",
-                 r["name"], r["median_radiance"], r["mean_radiance"],
-                 r["valid_pixels"], r["quality_pct"], r["alan_class"])
+    log.info("\n--- CITIES ---")
+    for _, r in cities_t.iterrows():
+        log.info("  %-20s %+6.2f%% [%+.2f, %+.2f]  R²=%.3f  p=%.1e  latest=%.2f nW  [%s]",
+                 r["name"], r["annual_pct_change"], r["ci_low"], r["ci_high"],
+                 r["r_squared"], r["p_value"],
+                 r["median_radiance_latest"], r["alan_class"])
 
     log.info("\n--- DARK-SKY SITES ---")
-    for _, r in sites_df.iterrows():
-        log.info("  %-30s median=%.2f  mean=%.2f  pixels=%d  quality=%.0f%%  [%s]",
-                 r["name"], r["median_radiance"], r["mean_radiance"],
-                 r["valid_pixels"], r["quality_pct"], r["alan_class"])
+    for _, r in sites_t.iterrows():
+        log.info("  %-30s %+6.2f%% [%+.2f, %+.2f]  R²=%.3f  p=%.1e  latest=%.2f nW  [%s]",
+                 r["name"], r["annual_pct_change"], r["ci_low"], r["ci_high"],
+                 r["r_squared"], r["p_value"],
+                 r["median_radiance_latest"], r["alan_class"])
 
-    city_avg = cities_df["median_radiance"].mean()
-    site_avg = sites_df["median_radiance"].mean()
-    log.info("\nCities average: %.2f nW/cm²/sr", city_avg)
-    log.info("Sites average:  %.2f nW/cm²/sr", site_avg)
-    log.info("Ratio: %.1fx", city_avg / site_avg if site_avg > 0 else float("inf"))
+    city_avg = cities_t["annual_pct_change"].mean()
+    site_avg = sites_t["annual_pct_change"].mean()
+    log.info("\nCities avg growth: %+.2f%%/yr", city_avg)
+    log.info("Sites avg growth:  %+.2f%%/yr", site_avg)
 
-    low_alan = sites_df[sites_df["alan_class"] == "low"]
-    log.info("\nDark-sky viable (median < 1 nW): %d of %d sites",
-             len(low_alan), len(sites_df))
+    low_alan = sites_t[sites_t["alan_class"] == "low"]
+    log.info("\nDark-sky viable (median < 1 nW in %d): %d of %d sites",
+             max(years), len(low_alan), len(sites_t))
     if len(low_alan) > 0:
         log.info("  %s", ", ".join(low_alan["name"].tolist()))
 
-    # Generate maps
+    # Generate maps (using latest year for static maps)
+    latest_year = max(years)
+    latest_subset_dir = os.path.join(args.output_dir, "subsets", str(latest_year))
+    latest_metrics = yearly_df[yearly_df["year"] == latest_year]
     district_gdf = gpd.read_file(args.shapefile_path)
-    generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir,
-                       args.output_dir, args.year)
+    generate_site_maps(gdf_sites, latest_metrics, district_gdf, latest_subset_dir,
+                       args.output_dir, latest_year)
+
+    # Generate time-series plots
+    generate_site_timeseries(yearly_df, args.output_dir)
 
     log.info("\nDone! Outputs in %s/", args.output_dir)
 
