@@ -181,6 +181,7 @@ def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
         df["median_radiance"],
         bins=[-np.inf, config.ALAN_LOW_THRESHOLD, config.ALAN_MEDIUM_THRESHOLD, np.inf],
         labels=["low", "medium", "high"],
+        right=False,
     )
 
     cols = ["name", "type", "district", "year", "mean_radiance", "median_radiance",

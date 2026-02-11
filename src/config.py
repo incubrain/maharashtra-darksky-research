@@ -75,14 +75,55 @@ ALAN_PERCENTILE_BINS = [0, 20, 40, 60, 80, 100]
 ALAN_PERCENTILE_LABELS = ["Pristine", "Low", "Medium", "High", "Very High"]
 
 # ─── LOCATION DEFINITIONS ────────────────────────────────────────────────
-# Urban benchmarks: major Maharashtra cities for ALAN reference
-URBAN_BENCHMARKS = {
-    "Mumbai":           {"lat": 18.9600, "lon": 72.8200, "district": "Mumbai"},
-    "Pune":             {"lat": 18.5167, "lon": 73.8554, "district": "Pune"},
-    "Nagpur":           {"lat": 21.1466, "lon": 79.0889, "district": "Nagpur"},
+# 43 most populous cities in Maharashtra (2011 Census) for ALAN reference.
+# Coordinates are approximate city-centre points for VIIRS buffer analysis.
+URBAN_CITIES = {
+    "Mumbai":           {"lat": 18.9750, "lon": 72.8258, "district": "Mumbai City"},
+    "Pune":             {"lat": 18.5204, "lon": 73.8567, "district": "Pune"},
+    "Nagpur":           {"lat": 21.1458, "lon": 79.0882, "district": "Nagpur"},
     "Thane":            {"lat": 19.2183, "lon": 72.9781, "district": "Thane"},
     "Pimpri-Chinchwad": {"lat": 18.6278, "lon": 73.8131, "district": "Pune"},
+    "Nashik":           {"lat": 20.0063, "lon": 73.7900, "district": "Nashik"},
+    "Kalyan-Dombivli":  {"lat": 19.2437, "lon": 73.1355, "district": "Thane"},
+    "Vasai-Virar":      {"lat": 19.3927, "lon": 72.8616, "district": "Palghar"},
+    "Aurangabad":       {"lat": 19.8762, "lon": 75.3433, "district": "Aurangabad"},
+    "Navi Mumbai":      {"lat": 19.0330, "lon": 73.0297, "district": "Thane"},
+    "Solapur":          {"lat": 17.6599, "lon": 75.9064, "district": "Solapur"},
+    "Mira-Bhayandar":   {"lat": 19.2952, "lon": 72.8544, "district": "Thane"},
+    "Bhiwandi-Nizampur": {"lat": 19.2967, "lon": 73.0631, "district": "Thane"},
+    "Amravati":         {"lat": 20.9320, "lon": 77.7523, "district": "Amravati"},
+    "Nanded-Waghala":   {"lat": 19.1602, "lon": 77.3150, "district": "Nanded"},
+    "Kolhapur":         {"lat": 16.7050, "lon": 74.2433, "district": "Kolhapur"},
+    "Ulhasnagar":       {"lat": 19.2167, "lon": 73.1500, "district": "Thane"},
+    "Sangli":           {"lat": 16.8524, "lon": 74.5815, "district": "Sangli"},
+    "Malegaon":         {"lat": 20.5549, "lon": 74.5346, "district": "Nashik"},
+    "Jalgaon":          {"lat": 21.0077, "lon": 75.5626, "district": "Jalgaon"},
+    "Akola":            {"lat": 20.7096, "lon": 76.9981, "district": "Akola"},
+    "Latur":            {"lat": 18.4088, "lon": 76.5604, "district": "Latur"},
+    "Dhule":            {"lat": 20.9042, "lon": 74.7749, "district": "Dhule"},
+    "Ahmednagar":       {"lat": 19.0952, "lon": 74.7496, "district": "Ahmednagar"},
+    "Chandrapur":       {"lat": 19.9500, "lon": 79.2961, "district": "Chandrapur"},
+    "Parbhani":         {"lat": 19.2578, "lon": 76.7737, "district": "Parbhani"},
+    "Ichalkaranji":     {"lat": 16.6912, "lon": 74.4605, "district": "Kolhapur"},
+    "Jalna":            {"lat": 19.8410, "lon": 75.8864, "district": "Jalna"},
+    "Ambernath":        {"lat": 19.1864, "lon": 73.1919, "district": "Thane"},
+    "Bhusawal":         {"lat": 21.0450, "lon": 75.7879, "district": "Jalgaon"},
+    "Panvel":           {"lat": 18.9906, "lon": 73.1173, "district": "Raigad"},
+    "Badlapur":         {"lat": 19.1668, "lon": 73.2368, "district": "Thane"},
+    "Beed":             {"lat": 18.9892, "lon": 75.7563, "district": "Beed"},
+    "Gondia":           {"lat": 21.4653, "lon": 80.1711, "district": "Gondia"},
+    "Satara":           {"lat": 17.6914, "lon": 74.0009, "district": "Satara"},
+    "Barshi":           {"lat": 18.2158, "lon": 75.6920, "district": "Solapur"},
+    "Yavatmal":         {"lat": 20.3888, "lon": 78.1204, "district": "Yavatmal"},
+    "Achalpur":         {"lat": 21.2567, "lon": 77.5101, "district": "Amravati"},
+    "Osmanabad":        {"lat": 18.1861, "lon": 76.0419, "district": "Osmanabad"},
+    "Nandurbar":        {"lat": 21.3700, "lon": 74.2400, "district": "Nandurbar"},
+    "Wardha":           {"lat": 20.7389, "lon": 78.6188, "district": "Wardha"},
+    "Udgir":            {"lat": 18.3926, "lon": 77.1161, "district": "Latur"},
+    "Hinganghat":       {"lat": 20.5490, "lon": 78.8360, "district": "Wardha"},
 }
+# Backwards-compatible alias
+URBAN_BENCHMARKS = URBAN_CITIES
 
 # Dark-sky candidate sites: protected areas, reserves, remote villages
 DARKSKY_SITES = {
@@ -92,7 +133,7 @@ DARKSKY_SITES = {
                                  "type": "tiger_reserve"},
     "Pench Tiger Reserve":      {"lat": 21.6900, "lon": 79.2300, "district": "Nagpur",
                                  "type": "tiger_reserve"},
-    "Udmal Tribal Village":     {"lat": 20.6587, "lon": 73.4836, "district": "Nashik",
+    "Udmal Tribal Village":     {"lat": 20.6567, "lon": 73.4856, "district": "Nashik",
                                  "type": "tribal_village"},
     "Kaas Plateau":             {"lat": 17.7200, "lon": 73.8228, "district": "Satara",
                                  "type": "plateau"},

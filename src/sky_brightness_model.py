@@ -27,11 +27,16 @@ log = logging.getLogger(__name__)
 # Natural sky brightness: ~21.6 mag/arcsec² (typical dark site)
 NATURAL_SKY_BRIGHTNESS = 21.6  # mag/arcsec²
 
-# Empirical scaling: 1 nW/cm²/sr upward radiance ≈ 0.18 mcd/m² at zenith
-# mcd/m² to mag/arcsec²: m = -2.5 * log10(L / 108000)
-# where L is in mcd/m² and 108000 mcd/m² ≈ 0 mag/arcsec²
-RADIANCE_TO_MCD = 0.18  # mcd/m² per nW/cm²/sr (empirical)
-REFERENCE_MCD = 108000  # mcd/m² corresponding to 0 mag/arcsec²
+# Empirical scaling: 1 nW/cm²/sr upward VIIRS radiance ≈ 0.177 mcd/m² zenith
+# luminance.  Derived from Falchi et al. (2016) World Atlas data calibrated
+# against SQM ground observations (e.g. 1.22 nW → 20.92 mag, 0.462 mcd/m²).
+# NOTE: This is a first-order linear approximation; the true relationship
+# requires full radiative-transfer modelling (atmosphere, aerosols, distance).
+RADIANCE_TO_MCD = 0.177  # mcd/m² per nW/cm²/sr (empirical)
+
+# Surface brightness zero-point: 0 mag/arcsec² = 108 000 cd/m²
+# (Unihedron / IAU convention).  Expressed here in mcd/m² for unit consistency.
+REFERENCE_MCD = 108_000_000  # mcd/m²  (= 108 000 cd/m² × 1000 mcd/cd)
 
 # Bortle scale thresholds (approximate mag/arcsec²)
 BORTLE_THRESHOLDS = {
