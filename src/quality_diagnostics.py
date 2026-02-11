@@ -18,6 +18,7 @@ import rasterio
 from rasterstats import zonal_stats
 
 from src import config
+from src import viirs_utils
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ def generate_quality_report(median_path, lit_path, cf_path, gdf, year,
     """
     with rasterio.open(median_path) as src:
         median_data = src.read(1).astype("float32")
+        # Apply DBS
+        median_data = viirs_utils.apply_dynamic_background_subtraction(median_data, year=year)
         transform = src.transform
         crs = src.crs
 

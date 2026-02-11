@@ -46,7 +46,7 @@ def _create_wedge(centre_x, centre_y, radius, start_angle, end_angle, n_points=6
     return Polygon(coords)
 
 
-def compute_directional_brightness(site_locations=None, raster_path=None,
+def compute_directional_brightness(site_locations=None, raster_path=None, year=None,
                                    buffer_km=None, output_csv=None):
     """Compute mean radiance in N/S/E/W quadrants around each site.
 
@@ -87,21 +87,37 @@ def compute_directional_brightness(site_locations=None, raster_path=None,
         row = {"site": site_name}
         dir_values = {}
 
-        for dir_name, (start_deg, end_deg) in directions.items():
-            wedge = _create_wedge(cx, cy, radius_m, start_deg, end_deg)
-            wedge_gdf = gpd.GeoDataFrame(
-                [{"geometry": wedge}],
-                crs=f"EPSG:{config.MAHARASHTRA_UTM_EPSG}"
-            ).to_crs("EPSG:4326")
+        # Prepare corrected raster
+        with rasterio.open(raster_path) as src:
+            data = src.read(1)
+            meta = src.meta.copy()
+            # Apply DBS
+            data_corrected = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
 
-            stats = zonal_stats(
-                wedge_gdf, raster_path,
-                stats=["mean"], nodata=np.nan, all_touched=True,
-            )
-            val = stats[0].get("mean", np.nan) if stats else np.nan
-            row[f"{dir_name}_mean"] = round(val, 4) if not np.isnan(val) else np.nan
-            if not np.isnan(val):
-                dir_values[dir_name] = val
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix="_directional_corr.tif")
+        os.close(tmp_fd)
+        try:
+            with rasterio.open(tmp_path, "w", **meta) as dst:
+                dst.write(data_corrected, 1)
+
+            for dir_name, (start_deg, end_deg) in directions.items():
+                wedge = _create_wedge(cx, cy, radius_m, start_deg, end_deg)
+                wedge_gdf = gpd.GeoDataFrame(
+                    [{"geometry": wedge}],
+                    crs=f"EPSG:{config.MAHARASHTRA_UTM_EPSG}"
+                ).to_crs("EPSG:4326")
+
+                stats = zonal_stats(
+                    wedge_gdf, tmp_path,
+                    stats=["mean"], nodata=np.nan, all_touched=True,
+                )
+                val = stats[0].get("mean", np.nan) if stats else np.nan
+                row[f"{dir_name}_mean"] = round(val, 4) if not np.isnan(val) else np.nan
+                if not np.isnan(val):
+                    dir_values[dir_name] = val
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
         # Determine dominant direction
         if dir_values:

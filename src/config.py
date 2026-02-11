@@ -70,6 +70,11 @@ MAHARASHTRA_UTM_EPSG = 32643  # UTM Zone 43N
 ALAN_LOW_THRESHOLD = 1.0   # Below = pristine/low
 ALAN_MEDIUM_THRESHOLD = 5.0  # 1-5 = moderate, >5 = high
 
+# Specific Analysis Thresholds
+DARKNESS_THRESHOLD_NW = 0.25 # "Pristine" darkness (nW/cm²/sr)
+SPRAWL_THRESHOLD_NW = 1.5   # Threshold for "Lit" urban area in sprawl maps
+
+
 # Percentile classification bins for graduated ALAN ranking
 ALAN_PERCENTILE_BINS = [0, 20, 40, 60, 80, 100]
 ALAN_PERCENTILE_LABELS = ["Pristine", "Low", "Medium", "High", "Very High"]

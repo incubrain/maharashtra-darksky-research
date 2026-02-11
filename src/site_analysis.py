@@ -28,6 +28,7 @@ from rasterstats import zonal_stats
 from shapely.geometry import Point
 
 from src import config
+from src import viirs_utils
 
 logging.basicConfig(
     level=logging.INFO,
@@ -115,9 +116,13 @@ def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
     with rasterio.open(cf_cvg_path) as src:
         cf_data = src.read(1)
 
-    valid = np.isfinite(median_data) & (lit_data > 0) & (cf_data >= cf_threshold)
+    # Dynamic Background Subtraction using central utility
+    median_data_corrected = viirs_utils.apply_dynamic_background_subtraction(median_data, year=year)
+
+    valid = np.isfinite(median_data_corrected) & (lit_data > 0) & (cf_data >= cf_threshold)
     total_valid = valid.sum()
-    filtered = np.where(valid, median_data, np.nan)
+    
+    filtered = np.where(valid, median_data_corrected, np.nan)
     log.info("Quality filter: %d pixels pass (lit_mask & cf_cvg >= %d)",
              total_valid, cf_threshold)
 
@@ -138,7 +143,8 @@ def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
         with rasterio.open(tmp_path, "w", **meta) as dst:
             dst.write(filtered, 1)
 
-        unfilt = np.where(np.isfinite(median_data), median_data, np.nan)
+        # For unfiltered stats, we also use the CORRECTED data to be consistent
+        unfilt = np.where(np.isfinite(median_data_corrected), median_data_corrected, np.nan)
         with rasterio.open(tmp_unfilt, "w", **meta) as dst:
             dst.write(unfilt, 1)
 
@@ -393,6 +399,107 @@ def generate_site_timeseries(yearly_df, output_dir):
     log.info("Saved: %s", path)
 
 
+def generate_annual_frames(years, output_dir, gdf_sites, district_gdf):
+    """Generate annual map frames for animation with YoY statistics."""
+    frame_dir = os.path.join(output_dir, "maps", "frames")
+    os.makedirs(frame_dir, exist_ok=True)
+    log.info("Generating annual frames in %s...", frame_dir)
+
+    # Pre-calculate state statistics
+    state_stats = {}
+    for year in years:
+        subset_dir = os.path.join(output_dir, "subsets", str(year))
+        median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
+        
+        if not os.path.exists(median_path):
+            log.warning("Missing raster for %d, skipping frame", year)
+            continue
+            
+        with rasterio.open(median_path) as src:
+            data = src.read(1)
+            # Apply DBS
+            data_corrected = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
+            
+            # Valid mask for statistics (finite and >0)
+            valid_mask = np.isfinite(data_corrected) & (data_corrected > 0)
+            if valid_mask.sum() > 0:
+                # Re-calculate stats on corrected data
+                median_val = np.median(data_corrected[valid_mask])
+                state_stats[year] = median_val
+            else:
+                state_stats[year] = np.nan
+
+    baseline_year = min(years)
+    baseline_val = state_stats.get(baseline_year, np.nan)
+    
+    cities = gdf_sites[gdf_sites["type"] == "city"]
+    sites = gdf_sites[gdf_sites["type"] == "site"]
+
+    # Generate frame for each year
+    for i, year in enumerate(years):
+        if year not in state_stats:
+            continue
+            
+        current_val = state_stats[year]
+        prev_year = years[i-1] if i > 0 else None
+        prev_val = state_stats.get(prev_year, np.nan)
+        
+        # Calculate changes
+        growth_vs_base = ((current_val - baseline_val) / baseline_val * 100) if baseline_val else np.nan
+        yoy_change = ((current_val - prev_val) / prev_val * 100) if prev_val else np.nan
+        
+        # Load raster for plotting
+        subset_dir = os.path.join(output_dir, "subsets", str(year))
+        median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
+        
+        with rasterio.open(median_path) as src:
+            raster = src.read(1)
+            extent = [src.bounds.left, src.bounds.right, src.bounds.bottom, src.bounds.top]
+            
+        # Apply Dynamic Background Subtraction for display
+        valid_mask = np.isfinite(raster) & (raster > 0)
+        if valid_mask.sum() > 0:
+            p01 = np.percentile(raster[valid_mask], 1)
+            raster = np.maximum(0, raster - p01)
+            
+        # Plot
+        fig, ax = plt.subplots(figsize=(14, 11))
+        
+        # Log-scale radiance
+        raster_log = np.log10(np.clip(raster, 0.01, None))
+        raster_log = np.where(np.isfinite(raster_log), raster_log, np.nan)
+        
+        im = ax.imshow(raster_log, extent=extent, cmap="magma", vmin=-2, vmax=2,
+                       origin="upper", aspect="auto")
+                       
+        district_gdf.boundary.plot(ax=ax, edgecolor="white", linewidth=0.3, alpha=0.5)
+        # sites/cities plotting removed for cleaner map
+        
+        # Annotations
+        stats_text = (
+            f"Year: {year}\n"
+            f"State Median Radiance: {current_val:.2f} nW/cm²/sr\n"
+            f"Growth vs {baseline_year}: {growth_vs_base:+.1f}%\n"
+            f"(YoY: {yoy_change:+.1f}%)" if prev_year else f"Year: {year}\nState Median Radiance: {current_val:.2f} nW/cm²/sr\n(Baseline)"
+        )
+        
+        # Add text box in bottom-right
+        ax.text(0.98, 0.02, stats_text, transform=ax.transAxes,
+                fontsize=14, fontweight="bold", color="white",
+                ha="right", va="bottom",
+                bbox=dict(boxstyle="round,pad=0.5", fc="black", alpha=0.7, ec="white"))
+
+        cbar = plt.colorbar(im, ax=ax, shrink=0.6, label="log₁₀(Radiance nW/cm²/sr)")
+        ax.set_title(f"Maharashtra ALAN Evolution ({year})", fontsize=16)
+        ax.set_axis_off()
+        
+        plt.tight_layout()
+        path = os.path.join(frame_dir, f"frame_{year}.png")
+        fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight", facecolor='black')
+        plt.close(fig)
+        log.info("Generated frame: %s", path)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Site-level ALAN analysis (5 cities + 11 dark-sky sites)"
@@ -528,6 +635,16 @@ def main():
 
     # Generate time-series plots
     generate_site_timeseries(yearly_df, args.output_dir)
+
+    # ── Animation frames generation (Task 8.1) ────────────────────────
+    generate_annual_frames(years, args.output_dir, gdf_sites, district_gdf)
+
+    # ── Advanced Visualizations (Task 8.2) ────────────────────────────
+    from src import visualizations
+    visualizations.generate_sprawl_frames(years, args.output_dir, district_gdf)
+    visualizations.generate_differential_frames(years, args.output_dir, district_gdf)
+    visualizations.generate_darkness_frames(years, args.output_dir, district_gdf)
+    visualizations.generate_trend_map(years, args.output_dir, district_gdf)
 
     # ── Spatial analysis enhancements ─────────────────────────────────
     csv_dir = os.path.join(args.output_dir, "csv")

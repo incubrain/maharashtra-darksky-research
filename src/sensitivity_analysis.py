@@ -17,6 +17,7 @@ import rasterio
 from rasterstats import zonal_stats
 
 from src import config
+from src import viirs_utils
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ def run_cf_threshold_sensitivity(subset_dir, gdf, year=2024,
         median_data = src.read(1).astype("float32")
         transform = src.transform
         crs = src.crs
+
+    # Apply DBS
+    median_data = viirs_utils.apply_dynamic_background_subtraction(median_data, year=year)
 
     with rasterio.open(lit_path) as src:
         lit_data = src.read(1)

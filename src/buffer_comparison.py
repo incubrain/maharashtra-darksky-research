@@ -20,15 +20,18 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
+import tempfile
+import rasterio
 from rasterstats import zonal_stats
 from shapely.geometry import Point
 
 from src import config
+from src import viirs_utils
 
 log = logging.getLogger(__name__)
 
 
-def compare_inside_outside_buffers(site_gdf, raster_path, buffer_km=None,
+def compare_inside_outside_buffers(site_gdf, raster_path, year=None, buffer_km=None,
                                    output_csv=None):
     """Compare ALAN inside site boundary vs. outside buffer zone.
 
@@ -68,18 +71,34 @@ def compare_inside_outside_buffers(site_gdf, raster_path, buffer_km=None,
             [{"geometry": inside_geom}], crs="EPSG:4326"
         )
 
-        # Zonal stats for inside
-        stats_in = zonal_stats(
-            inside_wgs, raster_path,
-            stats=["mean", "median", "count"],
-            nodata=np.nan, all_touched=True,
-        )
-        # Zonal stats for outside
-        stats_out = zonal_stats(
-            outside_gdf, raster_path,
-            stats=["mean", "median", "count"],
-            nodata=np.nan, all_touched=True,
-        )
+        # Prepare corrected raster
+        with rasterio.open(raster_path) as src:
+            data = src.read(1)
+            meta = src.meta.copy()
+            # Apply DBS
+            data_corrected = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
+
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix="_buffer_corr.tif")
+        os.close(tmp_fd)
+        try:
+            with rasterio.open(tmp_path, "w", **meta) as dst:
+                dst.write(data_corrected, 1)
+
+            # Zonal stats for inside
+            stats_in = zonal_stats(
+                inside_wgs, tmp_path,
+                stats=["mean", "median", "count"],
+                nodata=np.nan, all_touched=True,
+            )
+            # Zonal stats for outside
+            stats_out = zonal_stats(
+                outside_gdf, tmp_path,
+                stats=["mean", "median", "count"],
+                nodata=np.nan, all_touched=True,
+            )
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
         in_med = stats_in[0].get("median", np.nan) if stats_in else np.nan
         out_med = stats_out[0].get("median", np.nan) if stats_out else np.nan

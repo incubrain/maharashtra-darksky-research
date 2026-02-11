@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from src import config
+from src import viirs_utils
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ ECOLOGICAL_SENSITIVITY = {
 
 
 def compute_landcover_alan_stats(radiance_raster, landcover_raster,
-                                 output_csv=None):
+                                 year=None, output_csv=None):
     """Cross-tabulate ALAN levels by land cover class.
 
     Args:
@@ -65,6 +66,9 @@ def compute_landcover_alan_stats(radiance_raster, landcover_raster,
         rad_transform = rad_src.transform
         rad_crs = rad_src.crs
         rad_shape = rad_data.shape
+
+    # Apply Dynamic Background Subtraction
+    rad_data = viirs_utils.apply_dynamic_background_subtraction(rad_data, year=year)
 
     with rasterio.open(landcover_raster) as lc_src:
         lc_data = lc_src.read(1)
@@ -128,7 +132,7 @@ def compute_landcover_alan_stats(radiance_raster, landcover_raster,
 
 
 def compute_district_landcover_profile(gdf, radiance_raster, landcover_raster,
-                                       output_csv=None):
+                                       year=None, output_csv=None):
     """Per-district breakdown of ALAN by land cover type.
 
     Args:
@@ -153,6 +157,9 @@ def compute_district_landcover_profile(gdf, radiance_raster, landcover_raster,
             with rasterio.open(radiance_raster) as rad_src:
                 rad_clip, _ = rasterio_mask(rad_src, geom, crop=True, nodata=np.nan)
                 rad_clip = rad_clip[0].astype("float32")
+                # Apply DBS to the clipped area (or global if we had the full raster, 
+                # but local background subtraction is also valid/consistent here)
+                rad_clip = viirs_utils.apply_dynamic_background_subtraction(rad_clip, year=year)
 
             with rasterio.open(landcover_raster) as lc_src:
                 lc_clip, _ = rasterio_mask(lc_src, geom, crop=True, nodata=0)
