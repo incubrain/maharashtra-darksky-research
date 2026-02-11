@@ -406,6 +406,14 @@ def main():
                         help="Year range (e.g., '2012-2024') or single year")
     args = parser.parse_args()
 
+    # If using default output dir and 'latest' symlink exists, use that
+    # This ensures we pick up the subsets from the most recent run
+    if args.output_dir == config.DEFAULT_OUTPUT_DIR:
+        latest_dir = os.path.join(args.output_dir, "latest")
+        if os.path.isdir(latest_dir):
+            args.output_dir = latest_dir
+            log.info("Using latest run directory: %s", args.output_dir)
+
     # Parse year range
     if "-" in args.years:
         start, end = args.years.split("-")
