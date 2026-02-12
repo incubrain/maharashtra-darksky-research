@@ -4,7 +4,7 @@ District name validation across shapefile, CSVs, and configuration.
 Ensures consistent naming to prevent silent merge failures and data loss.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import geopandas as gpd
@@ -12,7 +12,7 @@ import pandas as pd
 
 from src import config
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def _normalize(name):

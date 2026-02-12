@@ -9,6 +9,7 @@ viirs/
 *.gz
 *.tiff
 outputs
+logs/
 
 # Shapefiles (can be re-downloaded)
 data/shapefiles/*.shp

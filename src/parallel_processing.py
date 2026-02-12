@@ -5,7 +5,7 @@ Uses multiprocessing to speed up district-level raster extraction
 across multiple years/layers.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
@@ -17,7 +17,7 @@ from rasterstats import zonal_stats
 
 from src import config
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def _zonal_stats_for_year(args):

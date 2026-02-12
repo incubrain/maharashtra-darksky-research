@@ -6,7 +6,7 @@ percentile rank within the statewide radiance distribution, providing
 relative context for ALAN levels.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -16,8 +16,9 @@ import numpy as np
 import pandas as pd
 
 from src import config
+from src.formulas.classification import TIER_COLORS
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def classify_by_percentiles(yearly_df, year=None, bins=None, labels=None,
@@ -131,13 +132,7 @@ def plot_tier_distribution(classified_df, output_path):
     tier_counts = classified_df.groupby(["year", "alan_tier"]).size().unstack(fill_value=0)
 
     labels = config.ALAN_PERCENTILE_LABELS
-    tier_colors = {
-        "Pristine": "#1a9850",
-        "Low": "#91cf60",
-        "Medium": "#fee08b",
-        "High": "#fc8d59",
-        "Very High": "#d73027",
-    }
+    tier_colors = TIER_COLORS
 
     fig, ax = plt.subplots(figsize=(12, 6))
     bottom = np.zeros(len(tier_counts))

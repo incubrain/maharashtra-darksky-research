@@ -53,7 +53,11 @@
   },
   "processing_history": [
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:14:12",
+=======
+      "date": "2026-02-12T12:31:04",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2012,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -62,7 +66,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:14:42",
+=======
+      "date": "2026-02-12T12:31:44",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2013,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -71,7 +79,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:15:10",
+=======
+      "date": "2026-02-12T12:32:27",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2014,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -80,7 +92,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:15:44",
+=======
+      "date": "2026-02-12T12:33:23",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2015,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -89,7 +105,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:16:15",
+=======
+      "date": "2026-02-12T12:34:11",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2016,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -98,7 +118,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:16:52",
+=======
+      "date": "2026-02-12T12:34:59",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2017,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -107,7 +131,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:17:26",
+=======
+      "date": "2026-02-12T12:35:41",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2018,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -116,7 +144,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:17:59",
+=======
+      "date": "2026-02-12T12:36:30",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2019,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -125,7 +157,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:18:33",
+=======
+      "date": "2026-02-12T12:37:21",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2020,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -134,7 +170,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:19:07",
+=======
+      "date": "2026-02-12T12:38:13",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2021,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -143,7 +183,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:19:44",
+=======
+      "date": "2026-02-12T12:39:03",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2022,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -152,7 +196,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:20:19",
+=======
+      "date": "2026-02-12T12:39:44",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2023,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -161,7 +209,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T17:20:52",
+=======
+      "date": "2026-02-12T12:40:30",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2024,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -170,7 +222,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:03:43",
+=======
+      "date": "2026-02-12T12:41:27",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2012,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -179,7 +235,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:04:13",
+=======
+      "date": "2026-02-12T12:42:12",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2013,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -188,7 +248,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:04:45",
+=======
+      "date": "2026-02-12T12:42:53",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2014,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -197,7 +261,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:05:19",
+=======
+      "date": "2026-02-12T12:43:35",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2015,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -206,7 +274,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:05:58",
+=======
+      "date": "2026-02-12T12:44:24",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2016,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -215,7 +287,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:06:31",
+=======
+      "date": "2026-02-12T12:45:16",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2017,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -224,7 +300,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:07:07",
+=======
+      "date": "2026-02-12T12:45:57",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2018,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -233,7 +313,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:07:41",
+=======
+      "date": "2026-02-12T12:46:37",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2019,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -242,7 +326,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:08:14",
+=======
+      "date": "2026-02-12T12:47:19",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2020,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -251,7 +339,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:08:48",
+=======
+      "date": "2026-02-12T12:48:00",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2021,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -260,7 +352,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:09:21",
+=======
+      "date": "2026-02-12T12:48:48",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2022,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -269,7 +365,11 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:09:53",
+=======
+      "date": "2026-02-12T12:49:31",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2023,
       "config_snapshot": {
         "cf_threshold": 5,
@@ -278,6 +378,7 @@
       }
     },
     {
+<<<<<<< HEAD
       "date": "2026-02-11T18:10:32",
       "year_processed": 2024,
       "config_snapshot": {
@@ -396,6 +497,9 @@
     },
     {
       "date": "2026-02-11T22:43:25",
+=======
+      "date": "2026-02-12T12:50:20",
+>>>>>>> vk/de3e-comprehensive-de
       "year_processed": 2024,
       "config_snapshot": {
         "cf_threshold": 5,

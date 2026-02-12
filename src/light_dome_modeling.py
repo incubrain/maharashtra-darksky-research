@@ -5,7 +5,7 @@ Fits exponential decay models to urban radial profiles to quantify
 the spatial extent of city light domes.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -16,8 +16,9 @@ import pandas as pd
 from scipy.optimize import curve_fit
 
 from src import config
+from src.formulas.fitting import EXP_DECAY_BOUNDS, EXP_DECAY_MAXFEV, LIGHT_DOME_BACKGROUND_THRESHOLD
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def _exp_decay(d, peak, decay_rate, background):
@@ -25,7 +26,7 @@ def _exp_decay(d, peak, decay_rate, background):
     return peak * np.exp(-decay_rate * d) + background
 
 
-def fit_light_dome_model(radial_profile_df, city_name, background_threshold=0.5):
+def fit_light_dome_model(radial_profile_df, city_name, background_threshold=None):
     """Fit exponential decay model to urban radial profile.
 
     Args:
@@ -36,6 +37,9 @@ def fit_light_dome_model(radial_profile_df, city_name, background_threshold=0.5)
     Returns:
         Dict with dome metrics.
     """
+    if background_threshold is None:
+        background_threshold = LIGHT_DOME_BACKGROUND_THRESHOLD
+
     sub = radial_profile_df[radial_profile_df["city"] == city_name].sort_values("distance_km")
 
     if len(sub) < 3:
@@ -65,8 +69,8 @@ def fit_light_dome_model(radial_profile_df, city_name, background_threshold=0.5)
     try:
         p0 = [radiance[0], 0.1, 0.1]
         popt, _ = curve_fit(_exp_decay, distances, radiance, p0=p0,
-                            bounds=([0, 0, 0], [np.inf, 10, np.inf]),
-                            maxfev=5000)
+                            bounds=EXP_DECAY_BOUNDS,
+                            maxfev=EXP_DECAY_MAXFEV)
         peak, decay_rate, background = popt
 
         fitted = _exp_decay(distances, *popt)
@@ -75,7 +79,7 @@ def fit_light_dome_model(radial_profile_df, city_name, background_threshold=0.5)
         r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
 
         # Dome radius: where model = background_threshold
-        if peak > background_threshold and decay_rate > 0:
+        if peak > background_threshold and decay_rate > 0 and background < background_threshold:
             dome_radius = -np.log((background_threshold - background) / peak) / decay_rate
             dome_radius = max(0, dome_radius)
         else:

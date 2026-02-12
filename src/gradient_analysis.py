@@ -12,7 +12,7 @@ Citation: Zheng, Q. et al. (2019). Developing a new cross-sensor calibration
           model. Remote Sensing, 11(18), 2132.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import geopandas as gpd
@@ -28,7 +28,7 @@ from shapely.geometry import Point
 from src import config
 from src import viirs_utils
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def extract_radial_profiles(raster_path, city_locations, year=None, radii_km=None, output_csv=None):

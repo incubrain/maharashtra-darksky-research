@@ -5,7 +5,7 @@ Computes great-circle distances and bearings from each site to the
 nearest urban benchmark, enabling regression of ALAN ~ distance.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import math
 import os
 
@@ -13,13 +13,14 @@ import numpy as np
 import pandas as pd
 
 from src import config
+from src.formulas.spatial import EARTH_RADIUS_KM
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def _haversine_km(lat1, lon1, lat2, lon2):
     """Compute great-circle distance between two points (WGS84, in km)."""
-    R = 6371.0  # Earth radius in km
+    R = EARTH_RADIUS_KM
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
     a = (math.sin(dlat / 2) ** 2 +

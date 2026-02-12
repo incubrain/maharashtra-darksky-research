@@ -10,7 +10,7 @@ Based on Falchi et al. (2016) methodology:
   Science Advances, 2(6), e1600377.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -20,36 +20,20 @@ import numpy as np
 import pandas as pd
 
 from src import config
+from src.formulas.sky_brightness import (
+    NATURAL_SKY_BRIGHTNESS as _NATURAL_SKY_BRIGHTNESS,
+    RADIANCE_TO_MCD as _RADIANCE_TO_MCD,
+    REFERENCE_MCD as _REFERENCE_MCD,
+    BORTLE_THRESHOLDS as _BORTLE_THRESHOLDS,
+)
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
-# Conversion constants from Falchi et al. (2016)
-# Natural sky brightness: ~21.6 mag/arcsec² (typical dark site)
-NATURAL_SKY_BRIGHTNESS = 21.6  # mag/arcsec²
-
-# Empirical scaling: 1 nW/cm²/sr upward VIIRS radiance ≈ 0.177 mcd/m² zenith
-# luminance.  Derived from Falchi et al. (2016) World Atlas data calibrated
-# against SQM ground observations (e.g. 1.22 nW → 20.92 mag, 0.462 mcd/m²).
-# NOTE: This is a first-order linear approximation; the true relationship
-# requires full radiative-transfer modelling (atmosphere, aerosols, distance).
-RADIANCE_TO_MCD = 0.177  # mcd/m² per nW/cm²/sr (empirical)
-
-# Surface brightness zero-point: 0 mag/arcsec² = 108 000 cd/m²
-# (Unihedron / IAU convention).  Expressed here in mcd/m² for unit consistency.
-REFERENCE_MCD = 108_000_000  # mcd/m²  (= 108 000 cd/m² × 1000 mcd/cd)
-
-# Bortle scale thresholds (approximate mag/arcsec²)
-BORTLE_THRESHOLDS = {
-    1: (21.75, np.inf, "Excellent dark-sky site"),
-    2: (21.50, 21.75, "Typical dark-sky site"),
-    3: (21.25, 21.50, "Rural sky"),
-    4: (20.50, 21.25, "Rural/suburban transition"),
-    5: (19.50, 20.50, "Suburban sky"),
-    6: (18.50, 19.50, "Bright suburban sky"),
-    7: (18.00, 18.50, "Suburban/urban transition"),
-    8: (17.00, 18.00, "City sky"),
-    9: (0.00, 17.00, "Inner-city sky"),
-}
+# Re-export from src.formulas.sky_brightness for backwards compatibility
+NATURAL_SKY_BRIGHTNESS = _NATURAL_SKY_BRIGHTNESS
+RADIANCE_TO_MCD = _RADIANCE_TO_MCD
+REFERENCE_MCD = _REFERENCE_MCD
+BORTLE_THRESHOLDS = _BORTLE_THRESHOLDS
 
 
 def radiance_to_sky_brightness(radiance_nw):

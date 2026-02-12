@@ -15,7 +15,7 @@ Usage (run from project root):
 
 import argparse
 import gzip
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 import shutil
 import sys
@@ -39,14 +39,11 @@ from shapely.geometry import mapping
 import statsmodels.api as sm
 
 from src import config
+from src.formulas.trend import fit_log_linear_trend as _core_fit_trend
+from src.formulas.classification import classify_alan
 
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +56,10 @@ def download_shapefiles(out_dir="data/shapefiles"):
     Downloads GeoJSON from the configured URL, renames columns using
     config.SHAPEFILE_COLUMN_MAP so downstream code always sees a "district"
     column regardless of the upstream source's naming convention.
+
+    Note
+    ----
+    Creates ``out_dir`` if it does not exist.
     """
     os.makedirs(out_dir, exist_ok=True)
     geojson_path = os.path.join(out_dir, "maharashtra_district.geojson")
@@ -152,6 +153,8 @@ def identify_layers(tif_paths):
             layers["cf_cvg"] = p
         elif "lit_mask" in basename:
             layers["lit_mask"] = p
+        else:
+            log.debug("Unrecognized layer file, skipping: %s", basename)
     return layers
 
 
@@ -223,6 +226,12 @@ def apply_quality_filters(median_path, lit_mask_path=None, cf_cvg_path=None,
          cf_threshold cloud-free observations per year. "Pixels with low
          temporal coverage are susceptible to ephemeral light contamination."
          (Elvidge et al. 2017, Section 3.1, p. 5864)
+
+    Returns
+    -------
+    tuple[np.ndarray, dict, rasterio.Affine]
+        (filtered_array, raster_metadata, transform). The filtered array has
+        NaN where quality filters excluded pixels.
     """
     if cf_threshold is None:
         cf_threshold = config.CF_COVERAGE_THRESHOLD
@@ -262,9 +271,8 @@ def compute_district_stats(filtered_array, transform, gdf):
     all_touched=True ensures boundary pixels are included, following standard
     practice for administrative boundary zonal statistics.
     """
-    # Write temporary raster for rasterstats
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix="_viirs_filtered.tif")
-    os.close(tmp_fd)
+    from rasterio.io import MemoryFile
+
     meta = {
         "driver": "GTiff",
         "height": filtered_array.shape[0],
@@ -275,19 +283,19 @@ def compute_district_stats(filtered_array, transform, gdf):
         "transform": transform,
         "nodata": np.nan,
     }
-    try:
-        with rasterio.open(tmp_path, "w", **meta) as dst:
+
+    # Use in-memory raster to avoid temp file side effects
+    with MemoryFile() as memfile:
+        with memfile.open(**meta) as dst:
             dst.write(filtered_array.astype("float32"), 1)
 
-        results = zonal_stats(
-            gdf, tmp_path,
-            stats=["mean", "median", "count", "min", "max", "std"],
-            nodata=np.nan,
-            all_touched=True,
-        )
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        with memfile.open() as src:
+            results = zonal_stats(
+                gdf, src.name,
+                stats=["mean", "median", "count", "min", "max", "std"],
+                nodata=np.nan,
+                all_touched=True,
+            )
 
     df = pd.DataFrame(results)
     df["district"] = gdf["district"].values
@@ -304,66 +312,22 @@ def compute_district_stats(filtered_array, transform, gdf):
 def fit_log_linear_trend(yearly_df, district_name):
     """Fit log-linear OLS: log(radiance + epsilon) ~ year, with bootstrap CI.
 
+    Thin wrapper around src.formulas.trend.fit_log_linear_trend() that
+    extracts arrays from the DataFrame and adds the "district" key to the result.
+
     TREND MODEL methodology:
     Log-linear regression (log(radiance) ~ year) is used because ALAN growth
     is approximately exponential in developing regions. The slope coefficient
     β is converted to annual % change via (exp(β) - 1) × 100.
-    A small constant (config.LOG_EPSILON = 1e-6) prevents log(0) for pixels
-    with zero radiance; this value is negligible relative to VIIRS minimum
-    detectable radiance (~0.1 nW/cm²/sr).
-    Bootstrap confidence intervals (1000 resamples) provide non-parametric
-    uncertainty estimates robust to non-normal residual distributions.
     Citation: Elvidge et al. (2021), Section 3; Li et al. (2020).
     """
     sub = yearly_df[yearly_df["district"] == district_name].sort_values("year")
-    if len(sub) < config.MIN_YEARS_FOR_TREND:
-        return {
-            "district": district_name,
-            "annual_pct_change": np.nan,
-            "ci_low": np.nan,
-            "ci_high": np.nan,
-            "r_squared": np.nan,
-            "p_value": np.nan,
-            "n_years": len(sub),
-        }
-
     years = sub["year"].values.astype(float)
     radiance = sub["median_radiance"].values.astype(float)
-    log_rad = np.log(radiance + config.LOG_EPSILON)
 
-    X = sm.add_constant(years)
-    model = sm.OLS(log_rad, X).fit()
-    beta = model.params[1]
-    annual_pct = (np.exp(beta) - 1) * 100
-
-    # Bootstrap CI
-    n_boot = config.BOOTSTRAP_RESAMPLES
-    boot_pcts = []
-    rng = np.random.default_rng(config.BOOTSTRAP_SEED)
-    for _ in range(n_boot):
-        idx = rng.choice(len(years), size=len(years), replace=True)
-        X_b = sm.add_constant(years[idx])
-        y_b = log_rad[idx]
-        try:
-            m_b = sm.OLS(y_b, X_b).fit()
-            boot_pcts.append((np.exp(m_b.params[1]) - 1) * 100)
-        except Exception:
-            continue
-
-    boot_pcts = np.array(boot_pcts)
-    ci_lo, ci_hi = config.BOOTSTRAP_CI_LEVEL
-    ci_low = np.percentile(boot_pcts, ci_lo) if len(boot_pcts) > 0 else np.nan
-    ci_high = np.percentile(boot_pcts, ci_hi) if len(boot_pcts) > 0 else np.nan
-
-    return {
-        "district": district_name,
-        "annual_pct_change": annual_pct,
-        "ci_low": ci_low,
-        "ci_high": ci_high,
-        "r_squared": model.rsquared,
-        "p_value": model.pvalues[1] if len(model.pvalues) > 1 else np.nan,
-        "n_years": len(sub),
-    }
+    result = _core_fit_trend(years, radiance)
+    result["district"] = district_name
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -518,305 +482,141 @@ def process_single_year(year, viirs_dir, gdf, output_dir, cf_threshold=None):
 
 
 def run_full_pipeline(args):
-    """Orchestrate the full analysis pipeline."""
-    from src.validate_names import validate_or_exit
+    """Orchestrate the full district analysis pipeline."""
+    from src.pipeline_steps import (
+        step_load_boundaries,
+        step_process_years,
+        step_save_yearly_radiance,
+        step_fit_trends,
+        step_stability_analysis,
+        step_breakpoint_detection,
+        step_trend_diagnostics,
+        step_quality_diagnostics,
+        step_benchmark_comparison,
+        step_radial_gradient_analysis,
+        step_light_dome_modeling,
+        step_generate_basic_maps,
+        step_statewide_visualizations,
+        step_graduated_classification,
+        step_district_reports,
+    )
 
-    # Load district boundaries
-    gdf = gpd.read_file(args.shapefile_path)
-    log.info("Loaded boundaries: %d districts", len(gdf))
+    steps = []
 
-    # Validate district count matches expectations
-    if len(gdf) != config.EXPECTED_DISTRICT_COUNT:
-        log.warning(
-            "Expected %d districts but found %d in %s",
-            config.EXPECTED_DISTRICT_COUNT, len(gdf), args.shapefile_path,
-        )
+    # Step 1: Load boundaries
+    result, gdf = step_load_boundaries(args.shapefile_path)
+    steps.append(result)
+    if not result.ok:
+        log.error("Pipeline aborted: %s", result.error)
+        sys.exit(1)
 
-    # Validate district names across data sources
-    validate_or_exit(args.shapefile_path, check_config=True)
-
-    # Parse year range
+    # Step 2: Parse years
     if "-" in args.years:
         start, end = args.years.split("-")
         years = list(range(int(start), int(end) + 1))
     else:
         years = [int(y) for y in args.years.split(",")]
 
-    # Process each year
-    all_yearly = []
-    for year in years:
-        df = process_single_year(
-            year, args.viirs_dir, gdf, args.output_dir, args.cf_threshold
-        )
-        if df is not None:
-            all_yearly.append(df)
-
-    if not all_yearly:
-        log.error("No data processed for any year!")
+    # Step 3: Process years (critical)
+    result, yearly_df = step_process_years(years, args.viirs_dir, gdf, args.output_dir, args.cf_threshold)
+    steps.append(result)
+    if not result.ok:
+        log.error("Pipeline aborted: no data processed")
         sys.exit(1)
 
-    yearly_df = pd.concat(all_yearly, ignore_index=True)
-    log.info("Total records: %d (%d years × %d districts)",
-             len(yearly_df), yearly_df["year"].nunique(),
-             yearly_df["district"].nunique())
+    # Prepare output directories (entity-based)
+    dirs = config.get_entity_dirs(args.output_dir, "district")
+    csv_dir = dirs["csv"]
+    maps_dir = dirs["maps"]
+    diagnostics_dir = dirs["diagnostics"]
 
-    # Save yearly radiance
-    csv_dir = os.path.join(args.output_dir, "csv")
-    os.makedirs(csv_dir, exist_ok=True)
-    yearly_path = os.path.join(csv_dir, "districts_yearly_radiance.csv")
-    yearly_df.to_csv(yearly_path, index=False)
-    log.info("Saved yearly data: %s", yearly_path)
+    # Step 4: Save yearly radiance (critical)
+    result, yearly_path = step_save_yearly_radiance(yearly_df, csv_dir)
+    steps.append(result)
+    if not result.ok:
+        log.error("Failed to save yearly radiance: %s", result.error)
+        sys.exit(1)
 
-    # Fit trends per district
-    districts = yearly_df["district"].unique()
-    trend_results = []
-    for d in districts:
-        result = fit_log_linear_trend(yearly_df, d)
-        # Add latest year radiance
-        latest = yearly_df[yearly_df["district"] == d].sort_values("year").iloc[-1]
-        result["mean_radiance_latest"] = latest["mean_radiance"]
-        result["median_radiance_latest"] = latest["median_radiance"]
+    # Step 5: Fit trends (critical)
+    result, trends_df = step_fit_trends(yearly_df, csv_dir)
+    steps.append(result)
+    if not result.ok:
+        log.error("Pipeline aborted: trend fitting failed")
+        sys.exit(1)
 
-        # Classify ALAN level
-        med = latest["median_radiance"]
-        if pd.isna(med):
-            result["alan_class"] = "unknown"
-        elif med < config.ALAN_LOW_THRESHOLD:
-            result["alan_class"] = "low"
-        elif med < config.ALAN_MEDIUM_THRESHOLD:
-            result["alan_class"] = "medium"
-        else:
-            result["alan_class"] = "high"
+    # Step 6: Generate basic maps (non-critical)
+    result, _ = step_generate_basic_maps(gdf, trends_df, yearly_df, args.output_dir, maps_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Basic maps failed: %s", result.error)
 
-        trend_results.append(result)
+    # Step 7: Stability analysis (non-critical)
+    result, stability_df = step_stability_analysis(yearly_df, csv_dir, diagnostics_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Stability analysis failed: %s", result.error)
+        stability_df = None
 
-    trends_df = pd.DataFrame(trend_results)
-    trends_path = os.path.join(csv_dir, "districts_trends.csv")
-    trends_df.to_csv(trends_path, index=False)
-    log.info("Saved trends: %s", trends_path)
+    # Step 8: Breakpoint detection (non-critical)
+    result, breakpoints_df = step_breakpoint_detection(yearly_df, csv_dir, diagnostics_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Breakpoint detection failed: %s", result.error)
+        breakpoints_df = None
 
-    # Print summary
-    log.info("\n" + "=" * 60)
-    log.info("TREND SUMMARY")
-    log.info("=" * 60)
-    for _, row in trends_df.sort_values("annual_pct_change", ascending=False).iterrows():
-        log.info("%-20s %+6.2f%% [%+.2f, %+.2f] | %.2f nW (%s)",
-                 row["district"], row["annual_pct_change"],
-                 row["ci_low"], row["ci_high"],
-                 row["median_radiance_latest"], row["alan_class"])
+    # Step 9: Trend diagnostics (non-critical)
+    result, diag_df = step_trend_diagnostics(yearly_df, csv_dir, diagnostics_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Trend diagnostics failed: %s", result.error)
+        diag_df = None
 
-    low_alan = trends_df[trends_df["alan_class"] == "low"]
-    log.info("\nLow-ALAN districts (median < 1 nW/cm²/sr): %s",
-             ", ".join(low_alan["district"].tolist()) if len(low_alan) > 0 else "None")
+    # Step 10: Quality diagnostics (non-critical)
+    result, quality_df = step_quality_diagnostics(years, args.output_dir, gdf, csv_dir, diagnostics_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Quality diagnostics failed: %s", result.error)
+        quality_df = None
 
-    # Generate maps
-    try:
-        generate_maps(gdf, trends_df, yearly_df, args.output_dir)
-    except Exception as e:
-        log.error("Failed to generate maps: %s", e)
+    # Step 11: Benchmark comparison (non-critical)
+    result, _ = step_benchmark_comparison(trends_df, csv_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Benchmark comparison failed: %s", result.error)
 
-    # ── Temporal stability metrics (Task 3.1) ───────────────────────────
-    stability_metrics = None
-    try:
-        from src.stability_metrics import compute_stability_metrics, plot_stability_scatter
-
-        stability_metrics = compute_stability_metrics(
-            yearly_df, entity_col="district",
-            output_csv=os.path.join(csv_dir, "district_stability_metrics.csv"),
-        )
-        plot_stability_scatter(
-            stability_metrics, entity_col="district",
-            output_path=os.path.join(args.output_dir, "maps", "stability_scatter.png"),
-        )
-    except Exception as e:
-        log.error("Failed to compute stability metrics: %s", e)
-
-    # ── Breakpoint detection (Task 3.2) ───────────────────────────────
-    try:
-        from src.breakpoint_analysis import analyze_all_breakpoints, plot_breakpoint_timeline
-
-        breakpoints = analyze_all_breakpoints(
-            yearly_df, entity_col="district",
-            output_csv=os.path.join(csv_dir, "district_breakpoints.csv"),
-        )
-        plot_breakpoint_timeline(
-            breakpoints,
-            output_path=os.path.join(args.output_dir, "maps", "breakpoint_timeline.png"),
-        )
-    except Exception as e:
-        log.error("Failed to compute breakpoints: %s", e)
-
-    # ── Trend model diagnostics (Task 3.3) ────────────────────────────
-    try:
-        from src.trend_diagnostics import (compute_all_diagnostics, plot_diagnostic_panel)
-
-        diagnostics_dir = os.path.join(args.output_dir, "diagnostics")
-        os.makedirs(diagnostics_dir, exist_ok=True)
-
-        diag_df = compute_all_diagnostics(
-            yearly_df, entity_col="district",
-            output_csv=os.path.join(csv_dir, "trend_diagnostics.csv"),
-        )
-
-        # Generate diagnostic plots for flagged districts
-        for _, row in diag_df.iterrows():
-            r2 = row.get("r_squared", 1.0)
-            outliers = row.get("outlier_years", "")
-            n_outliers = len(outliers.split("; ")) if outliers else 0
-            if (not np.isnan(r2) and r2 < 0.5) or n_outliers > 2:
-                plot_diagnostic_panel(
-                    yearly_df, row["district"], entity_col="district",
-                    output_path=os.path.join(diagnostics_dir,
-                                             f"{row['district']}_diagnostics.png"),
-                )
-    except Exception as e:
-        log.error("Failed to compute trend diagnostics: %s", e)
-
-    # ── Urban radial gradient analysis (Task 2.1) ─────────────────────
+    # Step 12: Radial gradient analysis (non-critical)
     latest_year = yearly_df["year"].max()
-    subset_dir = os.path.join(args.output_dir, "subsets", str(latest_year))
-    median_raster = os.path.join(subset_dir, f"maharashtra_median_{latest_year}.tif")
-    profiles = None
+    result, profiles_df = step_radial_gradient_analysis(args.output_dir, latest_year, csv_dir, maps_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Radial gradient analysis failed: %s", result.error)
+        profiles_df = None
 
-    if os.path.exists(median_raster):
-        try:
-            from src.gradient_analysis import extract_radial_profiles, plot_radial_decay_curves
+    # Step 13: Light dome modeling (non-critical, requires profiles)
+    if profiles_df is not None:
+        result, dome_metrics = step_light_dome_modeling(profiles_df, csv_dir, maps_dir)
+        steps.append(result)
+        if not result.ok:
+            log.warning("Light dome modeling failed: %s", result.error)
 
-            profiles = extract_radial_profiles(
-                raster_path=median_raster,
-                city_locations=config.URBAN_BENCHMARKS,
-                output_csv=os.path.join(csv_dir, f"urban_radial_profiles_{latest_year}.csv"),
-            )
-            plot_radial_decay_curves(
-                profiles,
-                output_path=os.path.join(args.output_dir, "maps", "urban_radial_profiles.png"),
-            )
-        except Exception as e:
-            log.error("Failed to compute radial gradients: %s", e)
+    # Step 14: Statewide visualizations (non-critical)
+    result, _ = step_statewide_visualizations(yearly_df, trends_df, gdf, quality_df, args.output_dir, maps_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Statewide visualizations failed: %s", result.error)
 
-    # ── Quality diagnostics (Task 4.1) ──────────────────────────────
-    quality_dfs = []
-    try:
-        from src.quality_diagnostics import generate_quality_report, plot_quality_heatmap
+    # Step 15: Graduated classification (non-critical)
+    result, _ = step_graduated_classification(yearly_df, csv_dir, maps_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Graduated classification failed: %s", result.error)
 
-        for year in years:
-            subset_dir = os.path.join(args.output_dir, "subsets", str(year))
-            median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
-            lit_path = os.path.join(subset_dir, f"maharashtra_lit_mask_{year}.tif")
-            cf_path = os.path.join(subset_dir, f"maharashtra_cf_cvg_{year}.tif")
-            if os.path.exists(median_path):
-                qdf = generate_quality_report(
-                    median_path, lit_path, cf_path, gdf, year,
-                    output_csv=None,  # consolidated into quality_all_years.csv
-                )
-                quality_dfs.append(qdf)
-
-        if quality_dfs:
-            all_quality = pd.concat(quality_dfs, ignore_index=True)
-            all_quality.to_csv(os.path.join(csv_dir, "quality_all_years.csv"), index=False)
-            plot_quality_heatmap(
-                all_quality,
-                output_path=os.path.join(args.output_dir, "maps", "quality_heatmap.png"),
-            )
-    except Exception as e:
-        log.error("Failed to generate quality diagnostics: %s", e)
-
-    # ── Benchmark comparison (Task 4.2) ──────────────────────────────
-    try:
-        from src.benchmark_comparison import compare_to_benchmarks
-
-        compare_to_benchmarks(
-            trends_df,
-            output_csv=os.path.join(csv_dir, "benchmark_comparison.csv"),
-        )
-    except Exception as e:
-        log.error("Failed to generate benchmark comparison: %s", e)
-
-    # ── Statewide visualizations (Task 5.3) ──────────────────────────
-    try:
-        from src.visualization_suite import (
-            create_multi_year_comparison_grid,
-            create_growth_classification_map,
-            create_enhanced_radiance_heatmap,
-        )
-
-        create_multi_year_comparison_grid(
-            yearly_df, gdf,
-            output_path=os.path.join(args.output_dir, "maps", "multi_year_comparison.png"),
-        )
-        create_growth_classification_map(
-            trends_df, gdf,
-            output_path=os.path.join(args.output_dir, "maps", "growth_classification.png"),
-        )
-        create_enhanced_radiance_heatmap(
-            yearly_df,
-            output_path=os.path.join(args.output_dir, "maps", "radiance_heatmap_log.png"),
-        )
-
-        if quality_dfs:
-            from src.visualization_suite import create_data_quality_map
-            create_data_quality_map(
-                all_quality, gdf,
-                output_path=os.path.join(args.output_dir, "maps", "data_quality_map.png"),
-            )
-    except Exception as e:
-        log.error("Failed to generate statewide visualizations: %s", e)
-
-    # ── Light dome modeling (Task 5.4) ───────────────────────────────
-    if os.path.exists(median_raster) and profiles is not None:
-        try:
-            from src.light_dome_modeling import model_all_city_domes, plot_dome_comparison
-
-            dome_metrics = model_all_city_domes(
-                profiles,
-                output_csv=os.path.join(csv_dir, "light_dome_metrics.csv"),
-            )
-            plot_dome_comparison(
-                dome_metrics, profiles,
-                output_path=os.path.join(args.output_dir, "maps", "light_dome_comparison.png"),
-            )
-        except Exception as e:
-            log.error("Failed to model light domes: %s", e)
-
-    # ── Graduated classification (Task 7.2) ──────────────────────────
-    try:
-        from src.graduated_classification import (
-            classify_temporal_trajectory,
-            plot_tier_distribution,
-            plot_tier_transition_matrix,
-        )
-
-        trajectory = classify_temporal_trajectory(
-            yearly_df,
-            output_csv=os.path.join(csv_dir, "graduated_classification.csv"),
-        )
-        if not trajectory.empty:
-            plot_tier_distribution(
-                trajectory,
-                output_path=os.path.join(args.output_dir, "maps", "tier_distribution.png"),
-            )
-            first_year = yearly_df["year"].min()
-            plot_tier_transition_matrix(
-                trajectory, first_year, latest_year,
-                output_path=os.path.join(args.output_dir, "maps",
-                                         f"tier_transitions_{first_year}_{latest_year}.png"),
-            )
-    except Exception as e:
-        log.error("Failed to generate graduated classification: %s", e)
-
-    # ── District-level reports (Task 5.1) ────────────────────────────
-    try:
-        from src.district_reports import generate_all_district_reports
-
-        generate_all_district_reports(
-            yearly_df=yearly_df,
-            trends_df=trends_df,
-            stability_df=stability_metrics,
-            gdf=gdf,
-            output_dir=os.path.join(args.output_dir, config.OUTPUT_DIRS["district_reports"]),
-        )
-    except Exception as e:
-        log.error("Failed to generate district reports: %s", e)
+    # Step 16: District reports (non-critical)
+    reports_dir = dirs["reports"]
+    result, _ = step_district_reports(yearly_df, trends_df, stability_df, gdf, args.output_dir, reports_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("District reports failed: %s", result.error)
 
     return trends_df, yearly_df
 
@@ -929,10 +729,22 @@ def _create_run_dir(base_output_dir, args):
     Structure:
         outputs/runs/2026-02-11_143022/
             config_snapshot.json   ← frozen settings for this run
-            csv/                   ← analysis results
-            maps/                  ← visualizations
-            diagnostics/           ← diagnostic plots
-            ...
+            subsets/{year}/        ← shared rasters
+            district/
+              csv/                 ← district analysis results
+              maps/                ← district visualizations
+              reports/             ← district PDFs
+              diagnostics/         ← district diagnostic plots
+            city/
+              csv/                 ← city analysis results
+              maps/                ← city visualizations
+              reports/             ← city PDFs
+              diagnostics/
+            site/
+              csv/                 ← site analysis results
+              maps/                ← site visualizations
+              reports/             ← site PDFs
+              diagnostics/
         outputs/latest → runs/2026-02-11_143022  (symlink)
 
     Returns the run-specific output directory path.
@@ -943,6 +755,12 @@ def _create_run_dir(base_output_dir, args):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     run_dir = os.path.join(base_output_dir, "runs", timestamp)
     os.makedirs(run_dir, exist_ok=True)
+
+    # Create entity subdirectories
+    for entity in ["district", "city", "site"]:
+        entity_dirs = config.get_entity_dirs(run_dir, entity)
+        for d in entity_dirs.values():
+            os.makedirs(d, exist_ok=True)
 
     # Save config snapshot
     snapshot = {

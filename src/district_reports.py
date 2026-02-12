@@ -4,7 +4,7 @@ District-level deep-dive PDF reports.
 Generates a comprehensive 4-page PDF report for each of the 36 districts.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -17,7 +17,7 @@ import statsmodels.api as sm
 
 from src import config
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def generate_district_report(district_name, yearly_df, trends_df, stability_df,

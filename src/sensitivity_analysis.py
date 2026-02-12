@@ -4,7 +4,7 @@ Automated sensitivity analysis for key parameters.
 Tests how results change with different cf_threshold and buffer_km values.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 import tempfile
 
@@ -19,7 +19,7 @@ from rasterstats import zonal_stats
 from src import config
 from src import viirs_utils
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def run_cf_threshold_sensitivity(subset_dir, gdf, year=2024,

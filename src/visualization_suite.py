@@ -5,19 +5,20 @@ Creates multi-panel maps, classification choropleths, enhanced heatmaps,
 and comparison charts for paper figures.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import geopandas as gpd
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from src import config
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def create_multi_year_comparison_grid(yearly_df, gdf, output_path,
@@ -92,15 +93,17 @@ def create_growth_classification_map(trends_df, gdf, output_path):
     for cls, color in color_map.items():
         subset = merged[merged["growth_class"] == cls]
         if not subset.empty:
-            subset.plot(ax=ax, color=color, edgecolor="black", linewidth=0.5,
-                        label=cls)
+            subset.plot(ax=ax, color=color, edgecolor="black", linewidth=0.5)
 
     for _, row in merged.iterrows():
         c = row.geometry.centroid
         ax.annotate(row["district"], xy=(c.x, c.y), fontsize=5,
                     ha="center", va="center")
 
-    ax.legend(loc="lower left", fontsize=9, title="Growth Rate")
+    handles = [mpatches.Patch(color=color, label=cls)
+               for cls, color in color_map.items()
+               if not merged[merged["growth_class"] == cls].empty]
+    ax.legend(handles=handles, loc="lower left", fontsize=9, title="Growth Rate")
     ax.set_title("Maharashtra: ALAN Growth Classification", fontsize=14)
     ax.set_axis_off()
     plt.tight_layout()

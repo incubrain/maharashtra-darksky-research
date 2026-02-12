@@ -4,43 +4,22 @@ Benchmark comparison: Maharashtra ALAN trends vs. published global/regional valu
 Validates local results against published literature benchmarks.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import numpy as np
 import pandas as pd
 
 from src import config
+from src.formulas.benchmarks import (
+    PUBLISHED_BENCHMARKS as _PUBLISHED_BENCHMARKS,
+    BENCHMARK_INTERPRETATION_THRESHOLD,
+)
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
-# Published benchmark values from literature
-PUBLISHED_BENCHMARKS = {
-    "global_average": {
-        "source": "Elvidge et al. (2021)",
-        "region": "Global (all countries)",
-        "period": "2012-2019",
-        "annual_growth_pct": 2.2,
-        "ci_low": 1.8,
-        "ci_high": 2.6,
-    },
-    "developing_asia": {
-        "source": "Elvidge et al. (2021)",
-        "region": "Developing Asia",
-        "period": "2012-2019",
-        "annual_growth_pct": 4.1,
-        "ci_low": 3.5,
-        "ci_high": 4.7,
-    },
-    "india_national": {
-        "source": "Li et al. (2020)",
-        "region": "India (national)",
-        "period": "2012-2018",
-        "annual_growth_pct": 5.3,
-        "ci_low": 4.8,
-        "ci_high": 5.8,
-    },
-}
+# Re-export from src.formulas.benchmarks for backwards compatibility
+PUBLISHED_BENCHMARKS = _PUBLISHED_BENCHMARKS
 
 
 def compare_to_benchmarks(trends_df, output_csv=None):
@@ -63,7 +42,7 @@ def compare_to_benchmarks(trends_df, output_csv=None):
     for name, benchmark in PUBLISHED_BENCHMARKS.items():
         diff = mah_median - benchmark["annual_growth_pct"]
 
-        if abs(diff) < 1.0:
+        if abs(diff) < BENCHMARK_INTERPRETATION_THRESHOLD:
             interpretation = "similar"
         elif diff > 0:
             interpretation = "faster"

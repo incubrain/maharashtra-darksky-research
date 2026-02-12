@@ -209,6 +209,8 @@ TIMESERIES_HIGHLIGHT_DISTRICTS = [
 ]
 
 # ─── OUTPUT PATHS ─────────────────────────────────────────────────────────
+import os
+
 OUTPUT_DIRS = {
     "csv": "csv",
     "maps": "maps",
@@ -217,6 +219,30 @@ OUTPUT_DIRS = {
     "site_reports": "site_reports",
     "diagnostics": "diagnostics",
 }
+
+
+def get_entity_dirs(base_dir, entity_type):
+    """Get output directories for an entity type.
+
+    Parameters
+    ----------
+    base_dir : str
+        Run-level output directory.
+    entity_type : str
+        "district", "city", or "site".
+
+    Returns
+    -------
+    dict
+        Keys: csv, maps, reports, diagnostics. Values: full paths.
+    """
+    entity_dir = os.path.join(base_dir, entity_type)
+    return {
+        "csv": os.path.join(entity_dir, "csv"),
+        "maps": os.path.join(entity_dir, "maps"),
+        "reports": os.path.join(entity_dir, "reports"),
+        "diagnostics": os.path.join(entity_dir, "diagnostics"),
+    }
 
 # ─── BOUNDARY SOURCE ─────────────────────────────────────────────────────
 # Source: datta07/INDIAN-SHAPEFILES (modern district spellings, EPSG:4326)

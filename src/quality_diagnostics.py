@@ -5,7 +5,7 @@ Details how many pixels pass/fail each quality filter (nodata, lit_mask,
 cf_cvg) per district per year.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import geopandas as gpd
@@ -20,7 +20,7 @@ from rasterstats import zonal_stats
 from src import config
 from src import viirs_utils
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def generate_quality_report(median_path, lit_path, cf_path, gdf, year,
