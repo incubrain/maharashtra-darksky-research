@@ -4,7 +4,7 @@ Site-level deep-dive PDF reports.
 Generates multi-page PDF reports for 5 cities and 11 dark-sky candidate sites.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -16,7 +16,7 @@ import pandas as pd
 
 from src import config
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def generate_site_report(site_name, site_type, metrics_df, yearly_df,

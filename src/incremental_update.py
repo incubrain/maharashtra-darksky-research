@@ -8,13 +8,13 @@ of data changes.
 
 import hashlib
 import json
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 import time
 
 import pandas as pd
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def _file_mtime(path):

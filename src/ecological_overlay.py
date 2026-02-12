@@ -6,7 +6,7 @@ ecological zones to assess light pollution impact on different
 habitat types and landscape contexts.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -16,33 +16,16 @@ import numpy as np
 import pandas as pd
 
 from src import config
+from src.formulas.ecology import (
+    LAND_COVER_CLASSES as _LAND_COVER_CLASSES,
+    ECOLOGICAL_SENSITIVITY as _ECOLOGICAL_SENSITIVITY,
+)
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
-# Simplified land cover classes based on MODIS/Copernicus classification
-# These serve as templates; actual class mapping depends on the land cover dataset used
-LAND_COVER_CLASSES = {
-    1: "Forest",
-    2: "Shrubland",
-    3: "Grassland",
-    4: "Cropland",
-    5: "Urban/Built-up",
-    6: "Water",
-    7: "Wetland",
-    8: "Barren",
-}
-
-# Ecological sensitivity weights (higher = more sensitive to ALAN)
-ECOLOGICAL_SENSITIVITY = {
-    "Forest": 0.9,
-    "Shrubland": 0.7,
-    "Grassland": 0.6,
-    "Cropland": 0.4,
-    "Urban/Built-up": 0.1,
-    "Water": 0.5,
-    "Wetland": 0.8,
-    "Barren": 0.2,
-}
+# Re-export from src.formulas.ecology for backwards compatibility
+LAND_COVER_CLASSES = _LAND_COVER_CLASSES
+ECOLOGICAL_SENSITIVITY = _ECOLOGICAL_SENSITIVITY
 
 
 def compute_landcover_alan_stats(radiance_raster, landcover_raster,

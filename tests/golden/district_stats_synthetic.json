@@ -1,0 +1,17 @@
+{
+  "n_rows": 39,
+  "n_districts": 3,
+  "n_years": 13,
+  "columns": [
+    "district",
+    "max_radiance",
+    "mean_radiance",
+    "median_radiance",
+    "min_radiance",
+    "pixel_count",
+    "std_radiance",
+    "year"
+  ],
+  "min_year": 2012,
+  "max_year": 2024
+}

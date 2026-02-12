@@ -5,7 +5,7 @@ Quantifies year-to-year variability to identify stable vs. erratic
 districts/sites. Dark-sky sites need STABLE low-ALAN for certification.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -15,8 +15,9 @@ import numpy as np
 import pandas as pd
 
 from src import config
+from src.formulas.classification import classify_stability
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def compute_stability_metrics(yearly_df, entity_col="district", output_csv=None):
@@ -50,12 +51,7 @@ def compute_stability_metrics(yearly_df, entity_col="district", output_csv=None)
         max_change = np.max(diffs) if len(diffs) > 0 else 0.0
 
         # Classify stability
-        if cv < 0.2:
-            stability = "stable"
-        elif cv < 0.5:
-            stability = "moderate"
-        else:
-            stability = "erratic"
+        stability = classify_stability(cv)
 
         results.append({
             entity_col: entity,

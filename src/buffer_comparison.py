@@ -10,7 +10,7 @@ Following Wang et al. (2022) protected area buffer methodology:
 between the interior of protected areas and surrounding developed land."
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import geopandas as gpd
@@ -25,7 +25,7 @@ from shapely.geometry import Point
 
 from src import config
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def compare_inside_outside_buffers(site_gdf, raster_path, buffer_km=None,

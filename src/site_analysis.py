@@ -12,7 +12,7 @@ Usage (run from project root):
 """
 
 import argparse
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 import tempfile
 
@@ -28,13 +28,10 @@ from rasterstats import zonal_stats
 from shapely.geometry import Point
 
 from src import config
+from src.formulas.trend import fit_log_linear_trend as _core_fit_trend
+from src.formulas.classification import classify_alan, classify_alan_series
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def _build_locations():
@@ -47,10 +44,22 @@ def _build_locations():
     return locations
 
 
+def _build_locations_filtered(entity_type="all"):
+    """Build LOCATIONS dict, optionally filtered by entity type."""
+    locations = {}
+    if entity_type in ("city", "all"):
+        for name, info in config.URBAN_BENCHMARKS.items():
+            locations[name] = (info["lat"], info["lon"], "city", info["district"])
+    if entity_type in ("site", "all"):
+        for name, info in config.DARKSKY_SITES.items():
+            locations[name] = (info["lat"], info["lon"], "site", info["district"])
+    return locations
+
+
 LOCATIONS = _build_locations()
 
 
-def build_site_geodataframe(buffer_km=None):
+def build_site_geodataframe(buffer_km=None, entity_type="all"):
     """Create GeoDataFrame with circular buffers around each site.
 
     BUFFER ANALYSIS methodology:
@@ -63,8 +72,9 @@ def build_site_geodataframe(buffer_km=None):
     """
     if buffer_km is None:
         buffer_km = config.SITE_BUFFER_RADIUS_KM
+    locations = _build_locations_filtered(entity_type)
     rows = []
-    for name, (lat, lon, loc_type, district) in LOCATIONS.items():
+    for name, (lat, lon, loc_type, district) in locations.items():
         rows.append({
             "name": name,
             "type": loc_type,
@@ -121,43 +131,40 @@ def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
     log.info("Quality filter: %d pixels pass (lit_mask & cf_cvg >= %d)",
              total_valid, cf_threshold)
 
-    # Write filtered raster to temp file for zonal_stats
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix="_viirs_site_filtered.tif")
-    os.close(tmp_fd)
+    # Use in-memory raster to avoid temp file side effects
+    from rasterio.io import MemoryFile
+
     meta = {
         "driver": "GTiff", "height": filtered.shape[0], "width": filtered.shape[1],
         "count": 1, "dtype": "float32", "crs": crs, "transform": transform,
         "nodata": np.nan,
     }
 
-    # Also write unfiltered for pixel count comparison
-    tmp_fd2, tmp_unfilt = tempfile.mkstemp(suffix="_viirs_site_unfiltered.tif")
-    os.close(tmp_fd2)
-
-    try:
-        with rasterio.open(tmp_path, "w", **meta) as dst:
+    # Create filtered raster in memory
+    with MemoryFile() as memfile_filt:
+        with memfile_filt.open(**meta) as dst:
             dst.write(filtered, 1)
 
-        unfilt = np.where(np.isfinite(median_data), median_data, np.nan)
-        with rasterio.open(tmp_unfilt, "w", **meta) as dst:
-            dst.write(unfilt, 1)
+        # Create unfiltered raster in memory for pixel count comparison
+        with MemoryFile() as memfile_unfilt:
+            unfilt = np.where(np.isfinite(median_data), median_data, np.nan)
+            with memfile_unfilt.open(**meta) as dst:
+                dst.write(unfilt, 1)
 
-        # Zonal stats on filtered
-        results_filt = zonal_stats(
-            gdf, tmp_path,
-            stats=["mean", "median", "count", "min", "max", "std"],
-            nodata=np.nan, all_touched=True,
-        )
-        # Zonal stats on unfiltered (for total pixel count / quality %)
-        results_unfilt = zonal_stats(
-            gdf, tmp_unfilt,
-            stats=["count"],
-            nodata=np.nan, all_touched=True,
-        )
-    finally:
-        for p in [tmp_path, tmp_unfilt]:
-            if os.path.exists(p):
-                os.remove(p)
+            # Compute zonal stats on both
+            with memfile_filt.open() as src_filt:
+                results_filt = zonal_stats(
+                    gdf, src_filt.name,
+                    stats=["mean", "median", "count", "min", "max", "std"],
+                    nodata=np.nan, all_touched=True,
+                )
+
+            with memfile_unfilt.open() as src_unfilt:
+                results_unfilt = zonal_stats(
+                    gdf, src_unfilt.name,
+                    stats=["count"],
+                    nodata=np.nan, all_touched=True,
+                )
 
     df = pd.DataFrame(results_filt)
     df["name"] = gdf["name"].values
@@ -177,12 +184,7 @@ def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
     })
 
     # Classify ALAN level
-    df["alan_class"] = pd.cut(
-        df["median_radiance"],
-        bins=[-np.inf, config.ALAN_LOW_THRESHOLD, config.ALAN_MEDIUM_THRESHOLD, np.inf],
-        labels=["low", "medium", "high"],
-        right=False,
-    )
+    df["alan_class"] = classify_alan_series(df["median_radiance"])
 
     cols = ["name", "type", "district", "year", "mean_radiance", "median_radiance",
             "min_radiance", "max_radiance", "std_radiance",
@@ -296,59 +298,40 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
 def fit_site_trends(yearly_df):
     """Fit log-linear OLS trends per site, with bootstrap CI.
 
+    Uses src.formulas.trend.fit_log_linear_trend() for core computation.
     Returns DataFrame with annual_pct_change, ci_low, ci_high, r_squared, p_value.
     """
-    import statsmodels.api as sm
-
     results = []
     for name in yearly_df["name"].unique():
         sub = yearly_df[yearly_df["name"] == name].sort_values("year")
         loc_type = sub["type"].iloc[0]
         district = sub["district"].iloc[0]
 
-        if len(sub) < config.MIN_YEARS_FOR_SITE_TREND:
-            results.append({
-                "name": name, "type": loc_type, "district": district,
-                "annual_pct_change": np.nan, "ci_low": np.nan, "ci_high": np.nan,
-                "r_squared": np.nan, "p_value": np.nan, "n_years": len(sub),
-            })
-            continue
-
         years = sub["year"].values.astype(float)
         radiance = sub["median_radiance"].values.astype(float)
-        log_rad = np.log(radiance + config.LOG_EPSILON)
 
-        X = sm.add_constant(years)
-        model = sm.OLS(log_rad, X).fit()
-        beta = model.params[1]
-        annual_pct = (np.exp(beta) - 1) * 100
+        core_result = _core_fit_trend(
+            years, radiance,
+            min_years=config.MIN_YEARS_FOR_SITE_TREND,
+        )
 
-        # Bootstrap CI
-        rng = np.random.default_rng(config.BOOTSTRAP_SEED)
-        boot_pcts = []
-        for _ in range(config.BOOTSTRAP_RESAMPLES):
-            idx = rng.choice(len(years), size=len(years), replace=True)
-            try:
-                m = sm.OLS(log_rad[idx], sm.add_constant(years[idx])).fit()
-                boot_pcts.append((np.exp(m.params[1]) - 1) * 100)
-            except Exception:
-                continue
-
-        boot_pcts = np.array(boot_pcts)
-        ci_lo, ci_hi = config.BOOTSTRAP_CI_LEVEL
-        ci_low = np.percentile(boot_pcts, ci_lo) if len(boot_pcts) > 0 else np.nan
-        ci_high = np.percentile(boot_pcts, ci_hi) if len(boot_pcts) > 0 else np.nan
-
-        latest = sub.iloc[-1]
-        results.append({
+        row = {
             "name": name, "type": loc_type, "district": district,
-            "annual_pct_change": annual_pct, "ci_low": ci_low, "ci_high": ci_high,
-            "r_squared": model.rsquared,
-            "p_value": model.pvalues[1] if len(model.pvalues) > 1 else np.nan,
-            "n_years": len(sub),
-            "median_radiance_latest": latest["median_radiance"],
-            "mean_radiance_latest": latest["mean_radiance"],
-        })
+            "annual_pct_change": core_result["annual_pct_change"],
+            "ci_low": core_result["ci_low"],
+            "ci_high": core_result["ci_high"],
+            "r_squared": core_result["r_squared"],
+            "p_value": core_result["p_value"],
+            "n_years": core_result["n_years"],
+        }
+
+        # Add latest radiance if we had enough data
+        if not np.isnan(core_result["annual_pct_change"]):
+            latest = sub.iloc[-1]
+            row["median_radiance_latest"] = latest["median_radiance"]
+            row["mean_radiance_latest"] = latest["mean_radiance"]
+
+        results.append(row)
 
     return pd.DataFrame(results)
 
@@ -404,6 +387,8 @@ def main():
     parser.add_argument("--cf-threshold", type=int, default=config.CF_COVERAGE_THRESHOLD)
     parser.add_argument("--years", default="2012-2024",
                         help="Year range (e.g., '2012-2024') or single year")
+    parser.add_argument("--type", choices=["city", "site", "all"], default="all",
+                        help="Entity type to analyze: city, site, or all (default: all)")
     args = parser.parse_args()
 
     # If using default output dir and 'latest' symlink exists, use that
@@ -422,211 +407,132 @@ def main():
         years = [int(y) for y in args.years.split(",")]
 
     log.info("Site-level ALAN analysis (%s)", args.years)
-    log.info("Buffer radius: %d km | CF threshold: %d", args.buffer_km,
-             args.cf_threshold)
+    log.info("Buffer radius: %d km | CF threshold: %d | Type: %s",
+             args.buffer_km, args.cf_threshold, args.type)
 
     # Validate district names
     from src.validate_names import validate_or_exit
     validate_or_exit(args.shapefile_path, check_config=True)
 
-    # Build site buffers
-    gdf_sites = build_site_geodataframe(args.buffer_km)
+    # Determine which entity types to process
+    entity_types = [args.type] if args.type != "all" else ["city", "site"]
 
-    # Compute metrics for each year
-    all_yearly = []
-    for year in years:
-        subset_dir = os.path.join(args.output_dir, "subsets", str(year))
-        if not os.path.isdir(subset_dir):
-            log.warning("No subsets for %d — skipping", year)
-            continue
-        df = compute_site_metrics(gdf_sites, subset_dir, year, args.cf_threshold)
-        if df is not None:
-            all_yearly.append(df)
-            log.info("Year %d: %d sites processed", year, len(df))
+    for entity_type in entity_types:
+        log.info("Running %s analysis...", entity_type)
+        _run_entity_pipeline(args, years, entity_type)
 
-    if not all_yearly:
+    log.info("\nDone! Outputs in %s/", args.output_dir)
+
+
+def _run_entity_pipeline(args, years, entity_type):
+    """Run the site/city analysis pipeline for a specific entity type."""
+    # Import step functions
+    from src.site_pipeline_steps import (
+        step_build_site_buffers,
+        step_compute_yearly_metrics,
+        step_save_site_yearly,
+        step_fit_site_trends,
+        step_site_maps,
+        step_spatial_analysis,
+        step_sky_brightness,
+        step_site_stability,
+        step_site_breakpoints,
+        step_site_benchmark,
+        step_site_visualizations,
+        step_site_reports,
+    )
+
+    steps = []
+
+    # Get entity-specific output directories
+    entity_dirs = config.get_entity_dirs(args.output_dir, entity_type)
+    csv_dir = entity_dirs["csv"]
+    maps_dir = entity_dirs["maps"]
+    reports_dir = entity_dirs["reports"]
+    diagnostics_dir = entity_dirs["diagnostics"]
+
+    # Create directories
+    for d in entity_dirs.values():
+        os.makedirs(d, exist_ok=True)
+
+    # Step 1: Build site buffers (filtered by entity_type)
+    result, gdf_sites = step_build_site_buffers(args.buffer_km, entity_type)
+    steps.append(result)
+    if not result.ok:
+        log.error("Pipeline aborted: %s", result.error)
+        return
+
+    # Step 2: Compute yearly metrics
+    result, yearly_df = step_compute_yearly_metrics(years, gdf_sites, args.output_dir, args.cf_threshold)
+    steps.append(result)
+    if not result.ok:
         log.error("No data processed. Run viirs_process.py first.")
         return
 
-    yearly_df = pd.concat(all_yearly, ignore_index=True)
-    log.info("Total records: %d (%d years × %d sites)",
-             len(yearly_df), yearly_df["year"].nunique(),
-             yearly_df["name"].nunique())
+    # Step 3: Save yearly CSV
+    result, yearly_path = step_save_site_yearly(yearly_df, csv_dir)
+    steps.append(result)
+    if not result.ok:
+        log.error("Pipeline aborted: %s", result.error)
+        return
 
-    # Save yearly CSV
-    csv_dir = os.path.join(args.output_dir, "csv")
-    os.makedirs(csv_dir, exist_ok=True)
-    yearly_path = os.path.join(csv_dir, "site_yearly_radiance.csv")
-    yearly_df.to_csv(yearly_path, index=False)
-    log.info("Saved: %s", yearly_path)
+    # Step 4: Fit trends
+    result, trends_df = step_fit_site_trends(yearly_df, csv_dir)
+    steps.append(result)
+    if not result.ok:
+        log.error("Pipeline aborted: %s", result.error)
+        return
 
-    # Fit trends
-    trends_df = fit_site_trends(yearly_df)
-
-    # Add ALAN classification based on latest year median
-    for i, row in trends_df.iterrows():
-        if "median_radiance_latest" not in row or pd.isna(row.get("median_radiance_latest")):
-            latest = yearly_df[(yearly_df["name"] == row["name"])].sort_values("year").iloc[-1]
-            trends_df.at[i, "median_radiance_latest"] = latest["median_radiance"]
-            trends_df.at[i, "mean_radiance_latest"] = latest["mean_radiance"]
-        med = trends_df.at[i, "median_radiance_latest"]
-        if pd.isna(med):
-            trends_df.at[i, "alan_class"] = "unknown"
-        elif med < config.ALAN_LOW_THRESHOLD:
-            trends_df.at[i, "alan_class"] = "low"
-        elif med < config.ALAN_MEDIUM_THRESHOLD:
-            trends_df.at[i, "alan_class"] = "medium"
-        else:
-            trends_df.at[i, "alan_class"] = "high"
-
-    trends_path = os.path.join(csv_dir, "site_trends.csv")
-    trends_df.to_csv(trends_path, index=False)
-    log.info("Saved: %s", trends_path)
-
-    # Print summary
-    log.info("\n" + "=" * 70)
-    log.info("SITE TREND SUMMARY (%s)", args.years)
-    log.info("=" * 70)
-
-    cities_t = trends_df[trends_df["type"] == "city"].sort_values(
-        "annual_pct_change", ascending=False)
-    sites_t = trends_df[trends_df["type"] == "site"].sort_values(
-        "annual_pct_change", ascending=False)
-
-    log.info("\n--- CITIES ---")
-    for _, r in cities_t.iterrows():
-        log.info("  %-20s %+6.2f%% [%+.2f, %+.2f]  R²=%.3f  p=%.1e  latest=%.2f nW  [%s]",
-                 r["name"], r["annual_pct_change"], r["ci_low"], r["ci_high"],
-                 r["r_squared"], r["p_value"],
-                 r["median_radiance_latest"], r["alan_class"])
-
-    log.info("\n--- DARK-SKY SITES ---")
-    for _, r in sites_t.iterrows():
-        log.info("  %-30s %+6.2f%% [%+.2f, %+.2f]  R²=%.3f  p=%.1e  latest=%.2f nW  [%s]",
-                 r["name"], r["annual_pct_change"], r["ci_low"], r["ci_high"],
-                 r["r_squared"], r["p_value"],
-                 r["median_radiance_latest"], r["alan_class"])
-
-    city_avg = cities_t["annual_pct_change"].mean()
-    site_avg = sites_t["annual_pct_change"].mean()
-    log.info("\nCities avg growth: %+.2f%%/yr", city_avg)
-    log.info("Sites avg growth:  %+.2f%%/yr", site_avg)
-
-    low_alan = sites_t[sites_t["alan_class"] == "low"]
-    log.info("\nDark-sky viable (median < 1 nW in %d): %d of %d sites",
-             max(years), len(low_alan), len(sites_t))
-    if len(low_alan) > 0:
-        log.info("  %s", ", ".join(low_alan["name"].tolist()))
-
-    # Generate maps (using latest year for static maps)
+    # Step 5: Generate maps (using latest year for static maps)
     latest_year = max(years)
-    latest_subset_dir = os.path.join(args.output_dir, "subsets", str(latest_year))
-    latest_metrics = yearly_df[yearly_df["year"] == latest_year]
     district_gdf = gpd.read_file(args.shapefile_path)
-    generate_site_maps(gdf_sites, latest_metrics, district_gdf, latest_subset_dir,
-                       args.output_dir, latest_year)
+    result, _ = step_site_maps(gdf_sites, yearly_df, district_gdf, args.output_dir, latest_year, maps_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Maps generation failed: %s", result.error)
 
-    # Generate time-series plots
-    generate_site_timeseries(yearly_df, args.output_dir)
+    # Step 6: Spatial analysis enhancements
+    result, spatial_results = step_spatial_analysis(gdf_sites, args.output_dir, latest_year, csv_dir, maps_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Spatial analysis failed: %s", result.error)
 
-    # ── Spatial analysis enhancements ─────────────────────────────────
-    csv_dir = os.path.join(args.output_dir, "csv")
-    maps_dir = os.path.join(args.output_dir, "maps")
-    median_path = os.path.join(latest_subset_dir, f"maharashtra_median_{latest_year}.tif")
+    # Step 7: Sky brightness estimation
+    latest_metrics = yearly_df[yearly_df["year"] == latest_year]
+    result, sky_metrics = step_sky_brightness(latest_metrics, csv_dir, maps_dir, latest_year)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Sky brightness analysis failed: %s", result.error)
 
-    if os.path.exists(median_path):
-        # Task 2.2: Inside vs outside buffer comparison
-        from src.buffer_comparison import (compare_inside_outside_buffers,
-                                           plot_inside_outside_comparison)
-        buffer_comparison = compare_inside_outside_buffers(
-            site_gdf=gdf_sites,
-            raster_path=median_path,
-            output_csv=os.path.join(csv_dir, f"site_buffer_comparison_{latest_year}.csv"),
-        )
-        plot_inside_outside_comparison(
-            buffer_comparison,
-            output_path=os.path.join(maps_dir, "site_buffer_comparison.png"),
-        )
+    # Step 8: Temporal stability for sites
+    result, site_stability = step_site_stability(yearly_df, csv_dir, diagnostics_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Stability analysis failed: %s", result.error)
 
-        # Task 2.3: Directional brightness analysis
-        from src.directional_analysis import (compute_directional_brightness,
-                                              plot_directional_polar)
-        directional = compute_directional_brightness(
-            raster_path=median_path,
-            output_csv=os.path.join(csv_dir, f"directional_brightness_{latest_year}.csv"),
-        )
-        plot_directional_polar(
-            directional,
-            output_path=os.path.join(maps_dir, "directional_brightness_polar.pdf"),
-        )
+    # Step 9: Breakpoint detection for sites
+    result, site_breakpoints = step_site_breakpoints(yearly_df, csv_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Breakpoint detection failed: %s", result.error)
 
-    # Task 2.4: Nearest city distance metrics
-    from src.proximity_analysis import compute_nearest_city_distances
-    proximity = compute_nearest_city_distances(
-        output_csv=os.path.join(csv_dir, "site_proximity_metrics.csv"),
-    )
+    # Step 10: Benchmark comparison for sites
+    result, _ = step_site_benchmark(trends_df, csv_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Benchmark comparison failed: %s", result.error)
 
-    # ── Sky brightness estimation (Task 7.1) ─────────────────────────
-    from src.sky_brightness_model import (
-        compute_sky_brightness_metrics,
-        plot_sky_brightness_distribution,
-    )
+    # Step 11: City vs site visualizations
+    result, _ = step_site_visualizations(latest_metrics, maps_dir)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Visualizations failed: %s", result.error)
 
-    sky_metrics = compute_sky_brightness_metrics(
-        latest_metrics,
-        output_csv=os.path.join(csv_dir, f"sky_brightness_{latest_year}.csv"),
-    )
-    plot_sky_brightness_distribution(
-        sky_metrics,
-        output_path=os.path.join(maps_dir, "sky_brightness_distribution.png"),
-    )
-
-    # ── Temporal stability for sites (Task 3.1) ──────────────────────
-    from src.stability_metrics import compute_stability_metrics, plot_stability_scatter
-
-    site_stability = compute_stability_metrics(
-        yearly_df, entity_col="name",
-        output_csv=os.path.join(csv_dir, "site_stability_metrics.csv"),
-    )
-    plot_stability_scatter(
-        site_stability, entity_col="name",
-        output_path=os.path.join(maps_dir, "site_stability_scatter.png"),
-    )
-
-    # ── Breakpoint detection for sites (Task 3.2) ────────────────────
-    from src.breakpoint_analysis import analyze_all_breakpoints
-
-    site_breakpoints = analyze_all_breakpoints(
-        yearly_df, entity_col="name",
-        output_csv=os.path.join(csv_dir, "site_breakpoints.csv"),
-    )
-
-    # ── Benchmark comparison for sites (Task 4.2) ────────────────────
-    from src.benchmark_comparison import compare_to_benchmarks
-
-    compare_to_benchmarks(
-        trends_df,
-        output_csv=os.path.join(csv_dir, "site_benchmark_comparison.csv"),
-    )
-
-    # ── City vs site boxplot (Task 5.3) ──────────────────────────────
-    from src.visualization_suite import create_city_vs_site_boxplot
-
-    create_city_vs_site_boxplot(
-        latest_metrics,
-        output_path=os.path.join(maps_dir, "city_vs_site_boxplot.png"),
-    )
-
-    # ── Site-level deep-dive reports (Task 5.2) ──────────────────────
-    from src.site_reports import generate_all_site_reports
-
-    generate_all_site_reports(
-        all_site_data=latest_metrics,
-        yearly_df=yearly_df,
-        output_dir=os.path.join(args.output_dir, config.OUTPUT_DIRS["site_reports"]),
-    )
-
-    log.info("\nDone! Outputs in %s/", args.output_dir)
+    # Step 12: Site-level deep-dive reports
+    result, _ = step_site_reports(latest_metrics, yearly_df, reports_dir, entity_type)
+    steps.append(result)
+    if not result.ok:
+        log.warning("Report generation failed: %s", result.error)
 
 
 if __name__ == "__main__":

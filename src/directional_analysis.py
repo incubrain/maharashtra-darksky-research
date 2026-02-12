@@ -5,7 +5,7 @@ Measures radiance in cardinal direction wedges around each site to
 identify dominant light pollution sources.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import math
 import os
 
@@ -19,8 +19,9 @@ from rasterstats import zonal_stats
 from shapely.geometry import Point, Polygon
 
 from src import config
+from src.formulas.spatial import DIRECTION_DEFINITIONS
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def _create_wedge(centre_x, centre_y, radius, start_angle, end_angle, n_points=64):
@@ -65,14 +66,6 @@ def compute_directional_brightness(site_locations=None, raster_path=None,
     if buffer_km is None:
         buffer_km = config.SITE_BUFFER_RADIUS_KM
 
-    # Direction definitions: (name, start_angle, end_angle) clockwise from N
-    directions = {
-        "north": (315, 45),
-        "east": (45, 135),
-        "south": (135, 225),
-        "west": (225, 315),
-    }
-
     results = []
     for site_name, info in site_locations.items():
         point = Point(info["lon"], info["lat"])
@@ -87,7 +80,9 @@ def compute_directional_brightness(site_locations=None, raster_path=None,
         row = {"site": site_name}
         dir_values = {}
 
-        for dir_name, (start_deg, end_deg) in directions.items():
+        for dir_name, dir_def in DIRECTION_DEFINITIONS.items():
+            start_deg = dir_def["start_angle"]
+            end_deg = dir_def["end_angle"]
             wedge = _create_wedge(cx, cy, radius_m, start_deg, end_deg)
             wedge_gdf = gpd.GeoDataFrame(
                 [{"geometry": wedge}],

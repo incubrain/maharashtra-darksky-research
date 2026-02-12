@@ -5,7 +5,7 @@ Identifies years where ALAN growth rate changed significantly
 (acceleration/deceleration) using AIC-based model selection.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -17,7 +17,7 @@ import statsmodels.api as sm
 
 from src import config
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def detect_trend_breakpoints(yearly_df, district, entity_col="district"):

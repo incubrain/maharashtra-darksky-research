@@ -4,7 +4,7 @@ Trend model diagnostics: residual analysis, outlier detection, model validation.
 Validates log-linear trend model assumptions and identifies anomalous years.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import matplotlib
@@ -16,8 +16,16 @@ import statsmodels.api as sm
 from scipy import stats as scipy_stats
 
 from src import config
+from src.formulas.diagnostics_thresholds import (
+    OUTLIER_Z_THRESHOLD,
+    DW_WARNING_LOW,
+    DW_WARNING_HIGH,
+    JB_P_THRESHOLD,
+    COOKS_D_THRESHOLD,
+    R_SQUARED_WARNING,
+)
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def compute_trend_diagnostics(yearly_df, district, entity_col="district"):
@@ -71,19 +79,19 @@ def compute_trend_diagnostics(yearly_df, district, entity_col="district"):
         cooks_d = np.zeros(len(years))
         max_cooks = 0.0
 
-    # Outlier years (|standardized residual| > 2)
-    outlier_mask = np.abs(std_resid) > 2
+    # Outlier years (|standardized residual| > threshold)
+    outlier_mask = np.abs(std_resid) > OUTLIER_Z_THRESHOLD
     outlier_years = sub["year"].values[outlier_mask].tolist()
 
     # Model warnings
     warnings_list = []
-    if dw < 1.0 or dw > 3.0:
+    if dw < DW_WARNING_LOW or dw > DW_WARNING_HIGH:
         warnings_list.append("high autocorrelation (DW={:.2f})".format(dw))
-    if jb_p is not None and not np.isnan(jb_p) and jb_p < 0.05:
+    if jb_p is not None and not np.isnan(jb_p) and jb_p < JB_P_THRESHOLD:
         warnings_list.append("non-normal residuals (JB p={:.3f})".format(jb_p))
-    if max_cooks > 1.0:
+    if max_cooks > COOKS_D_THRESHOLD:
         warnings_list.append("high-influence observation (Cook's D={:.2f})".format(max_cooks))
-    if model.rsquared < 0.5:
+    if model.rsquared < R_SQUARED_WARNING:
         warnings_list.append("poor model fit (R²={:.3f})".format(model.rsquared))
 
     return {

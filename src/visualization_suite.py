@@ -5,7 +5,7 @@ Creates multi-panel maps, classification choropleths, enhanced heatmaps,
 and comparison charts for paper figures.
 """
 
-import logging
+from src.logging_config import get_pipeline_logger
 import os
 
 import geopandas as gpd
@@ -17,7 +17,7 @@ import pandas as pd
 
 from src import config
 
-log = logging.getLogger(__name__)
+log = get_pipeline_logger(__name__)
 
 
 def create_multi_year_comparison_grid(yearly_df, gdf, output_path,
