@@ -208,10 +208,12 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     cities = merged[merged["type"] == "city"]
     sites = merged[merged["type"] == "site"]
 
-    sites.plot(ax=ax, color="forestgreen", alpha=0.4, edgecolor="darkgreen",
-               linewidth=1.2, label="Dark-sky sites")
-    cities.plot(ax=ax, color="crimson", alpha=0.4, edgecolor="darkred",
-                linewidth=1.2, label="Cities")
+    if not sites.empty:
+        sites.plot(ax=ax, color="forestgreen", alpha=0.4, edgecolor="darkgreen",
+                   linewidth=1.2, label="Dark-sky sites")
+    if not cities.empty:
+        cities.plot(ax=ax, color="crimson", alpha=0.4, edgecolor="darkred",
+                    linewidth=1.2, label="Cities")
 
     for _, row in merged.iterrows():
         centroid = row.geometry.centroid
@@ -225,10 +227,14 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
             bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="grey", alpha=0.8),
         )
 
-    city_patch = mpatches.Patch(color="crimson", alpha=0.4, label="Cities (10 km buffer)")
-    site_patch = mpatches.Patch(color="forestgreen", alpha=0.4,
-                                label="Dark-sky sites (10 km buffer)")
-    ax.legend(handles=[city_patch, site_patch], loc="lower left", fontsize=9)
+    handles = []
+    if not cities.empty:
+        handles.append(mpatches.Patch(color="crimson", alpha=0.4, label="Cities (10 km buffer)"))
+    if not sites.empty:
+        handles.append(mpatches.Patch(color="forestgreen", alpha=0.4,
+                                      label="Dark-sky sites (10 km buffer)"))
+    if handles:
+        ax.legend(handles=handles, loc="lower left", fontsize=9)
     ax.set_title(f"Maharashtra: ALAN Analysis Sites ({year})", fontsize=14)
     ax.set_axis_off()
     plt.tight_layout()
@@ -276,8 +282,10 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     im = ax.imshow(raster_log, extent=extent, cmap="magma", vmin=-2, vmax=2,
                    origin="upper", aspect="auto")
     district_gdf.boundary.plot(ax=ax, edgecolor="white", linewidth=0.3, alpha=0.5)
-    sites.plot(ax=ax, facecolor="none", edgecolor="lime", linewidth=1.5)
-    cities.plot(ax=ax, facecolor="none", edgecolor="cyan", linewidth=1.5)
+    if not sites.empty:
+        sites.plot(ax=ax, facecolor="none", edgecolor="lime", linewidth=1.5)
+    if not cities.empty:
+        cities.plot(ax=ax, facecolor="none", edgecolor="cyan", linewidth=1.5)
 
     for _, row in merged.iterrows():
         c = row.geometry.centroid
@@ -349,7 +357,8 @@ def generate_site_timeseries(yearly_df, output_dir):
     ax.set_xlabel("Year", fontsize=12)
     ax.set_ylabel("Median Radiance (nW/cm²/sr)", fontsize=12)
     ax.set_title("ALAN Time Series: Urban Benchmarks (5 Cities)", fontsize=14)
-    ax.legend(fontsize=9)
+    if ax.get_legend_handles_labels()[1]:
+        ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     path = os.path.join(maps_dir, "site_timeseries_cities.png")

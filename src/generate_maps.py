@@ -65,7 +65,7 @@ def generate_district_maps(base_dir, shapefile_path):
 
             # Basic maps (choropleth, time series)
             from src.viirs_process import generate_maps
-            generate_maps(gdf, trends_df, yearly_df, base_dir)
+            generate_maps(gdf, trends_df, yearly_df, os.path.join(base_dir, "district"))
 
             # Statewide visualizations
             from src.visualization_suite import (
@@ -180,11 +180,12 @@ def generate_city_maps(base_dir, shapefile_path):
             latest_metrics = yearly_df[yearly_df["year"] == latest_year]
 
             latest_subset_dir = os.path.join(base_dir, "subsets", str(latest_year))
+            city_dir = os.path.join(base_dir, "city")
             generate_site_maps(
                 gdf_sites, latest_metrics, district_gdf,
-                latest_subset_dir, base_dir, latest_year,
+                latest_subset_dir, city_dir, latest_year,
             )
-            generate_site_timeseries(yearly_df, base_dir)
+            generate_site_timeseries(yearly_df, city_dir)
 
             log.info("City maps generated in %s", maps_dir)
 
@@ -254,11 +255,12 @@ def generate_site_maps_standalone(base_dir, shapefile_path):
             latest_metrics = yearly_df[yearly_df["year"] == latest_year]
 
             latest_subset_dir = os.path.join(base_dir, "subsets", str(latest_year))
+            site_dir = os.path.join(base_dir, "site")
             generate_site_maps(
                 gdf_sites, latest_metrics, district_gdf,
-                latest_subset_dir, base_dir, latest_year,
+                latest_subset_dir, site_dir, latest_year,
             )
-            generate_site_timeseries(yearly_df, base_dir)
+            generate_site_timeseries(yearly_df, site_dir)
 
             # Sky brightness distribution
             sky_path = os.path.join(csv_dir, "sky_brightness_{}.csv".format(latest_year))

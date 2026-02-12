@@ -79,7 +79,7 @@ def fit_light_dome_model(radial_profile_df, city_name, background_threshold=None
         r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0
 
         # Dome radius: where model = background_threshold
-        if peak > background_threshold and decay_rate > 0:
+        if peak > background_threshold and decay_rate > 0 and background < background_threshold:
             dome_radius = -np.log((background_threshold - background) / peak) / decay_rate
             dome_radius = max(0, dome_radius)
         else:

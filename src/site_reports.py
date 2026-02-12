@@ -80,7 +80,8 @@ def generate_site_report(site_name, site_type, metrics_df, yearly_df,
             ax.set_xlabel("Year", fontsize=12)
             ax.set_ylabel("Median Radiance (nW/cm²/sr)", fontsize=12)
             ax.set_title(f"{site_name}: ALAN Time Series", fontsize=14)
-            ax.legend(fontsize=9)
+            if ax.get_legend_handles_labels()[1]:
+                ax.legend(fontsize=9)
             ax.grid(True, alpha=0.3)
             plt.tight_layout()
             pdf.savefig(fig, bbox_inches="tight")
@@ -220,7 +221,8 @@ def _write_site_pages(pdf, site_name, site_type, metrics_df, yearly_df,
         ax.set_xlabel("Year", fontsize=12)
         ax.set_ylabel("Median Radiance (nW/cm\u00b2/sr)", fontsize=12)
         ax.set_title(f"{site_name}: ALAN Time Series", fontsize=14)
-        ax.legend(fontsize=9)
+        if ax.get_legend_handles_labels()[1]:
+            ax.legend(fontsize=9)
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
         pdf.savefig(fig, bbox_inches="tight")
