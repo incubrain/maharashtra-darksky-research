@@ -11,7 +11,7 @@ Verifies that:
 import numpy as np
 import pytest
 
-from src.site_analysis import build_site_geodataframe, LOCATIONS
+from src.site.site_analysis import build_site_geodataframe, LOCATIONS
 from src import config
 
 

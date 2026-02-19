@@ -8,7 +8,7 @@ viirs/
 *.tif
 *.gz
 *.tiff
-outputs
+/outputs
 logs/
 
 # Shapefiles (can be re-downloaded)

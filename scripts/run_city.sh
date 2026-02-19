@@ -17,13 +17,13 @@ fi
 START_TIME=$(date +%s)
 
 echo "[1/3] City analysis..."
-python3 -m src.site_analysis --type city "$@"
+python3 -m src.site.site_analysis --type city "$@"
 
 echo "[2/3] Generating city maps..."
-python3 -m src.generate_maps --type city "$@"
+python3 -m src.outputs.generate_maps --type city "$@"
 
 echo "[3/3] Generating city reports..."
-python3 -m src.generate_reports --type city "$@"
+python3 -m src.outputs.generate_reports --type city "$@"
 
 END_TIME=$(date +%s)
 echo "City pipeline complete in $((END_TIME - START_TIME))s"

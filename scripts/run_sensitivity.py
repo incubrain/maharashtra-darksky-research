@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import geopandas as gpd
 
 from src import config
-from src.sensitivity_analysis import (
+from src.analysis.sensitivity_analysis import (
     run_cf_threshold_sensitivity,
     plot_sensitivity_results,
 )

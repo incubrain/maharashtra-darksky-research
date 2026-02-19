@@ -39,19 +39,19 @@ python3 -m src.viirs_process "$@"
 
 echo ""
 echo "[3/6] City analysis..."
-python3 -m src.site_analysis --type city "$@"
+python3 -m src.site.site_analysis --type city "$@"
 
 echo ""
 echo "[4/6] Dark-sky site analysis..."
-python3 -m src.site_analysis --type site "$@"
+python3 -m src.site.site_analysis --type site "$@"
 
 echo ""
 echo "[5/6] Generating maps..."
-python3 -m src.generate_maps --type all "$@"
+python3 -m src.outputs.generate_maps --type all "$@"
 
 echo ""
 echo "[6/6] Generating reports..."
-python3 -m src.generate_reports --type all "$@"
+python3 -m src.outputs.generate_reports --type all "$@"
 
 END_TIME=$(date +%s)
 ELAPSED=$((END_TIME - START_TIME))

@@ -12,7 +12,7 @@ Verifies that:
 import numpy as np
 import pytest
 
-from src.sky_brightness_model import (
+from src.analysis.sky_brightness_model import (
     radiance_to_sky_brightness,
     classify_bortle,
     NATURAL_SKY_BRIGHTNESS,

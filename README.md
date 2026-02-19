@@ -43,6 +43,70 @@ source viirs_env/bin/activate
 pip install -r requirements.txt
 ```
 
+## Project Structure
+
+```
+src/
+├── config.py                    # Centralized configuration (thresholds, paths, sites)
+├── pipeline_runner.py           # CLI orchestrator for district pipeline
+├── pipeline_steps.py            # District-level step functions (steps 1-15)
+├── pipeline_types.py            # StepResult dataclass
+├── logging_config.py            # StepTimer, pipeline logger
+├── viirs_process.py             # Core VIIRS raster processing
+├── viirs_utils.py               # Raster utilities (DBS, subsetting)
+├── preprocess.py                # Unpack/subset preprocessing
+├── validate_names.py            # District name validation
+├── cache_manager.py             # Intermediate result caching
+├── incremental_update.py        # Incremental year updates
+├── dataset_aggregator.py        # Cross-dataset merge logic
+├── cross_dataset_steps.py       # Steps 16-20 (dataset correlation/classification)
+│
+├── formulas/                    # Pure functions (no I/O, no state)
+│   ├── classification.py        # ALAN thresholds, stability, graduated tiers
+│   ├── trend.py                 # Log-linear OLS with bootstrap CI
+│   ├── sky_brightness.py        # Radiance → mag/arcsec², Bortle scale
+│   ├── spatial.py               # Direction definitions, Haversine
+│   ├── ecology.py               # Land-cover classes, ecological sensitivity
+│   ├── diagnostics.py           # DW, JB, Cook's D thresholds
+│   ├── benchmarks.py            # IDA/satellite reference values
+│   └── correlation.py           # Pearson, Spearman, partial, OLS
+│
+├── datasets/                    # External dataset adapters (registry pattern)
+│   ├── __init__.py              # DATASET_REGISTRY mapping
+│   ├── _base.py                 # DatasetMeta, DatasetResult dataclasses
+│   ├── _name_resolver.py        # Fuzzy district-name matching
+│   └── census_2011_pca.py       # Census 2011 PCA adapter
+│
+├── analysis/                    # Domain-specific analysis modules
+│   ├── benchmark_comparison.py  # Compare to IDA/satellite benchmarks
+│   ├── breakpoint_analysis.py   # Piecewise trend breakpoint detection
+│   ├── buffer_comparison.py     # Inside vs outside buffer radiance
+│   ├── directional_analysis.py  # N/S/E/W quadrant brightness
+│   ├── ecological_overlay.py    # Land-cover / ecological sensitivity
+│   ├── gradient_analysis.py     # Radial decay profiles from urban cores
+│   ├── graduated_classification.py  # Percentile-based tier classification
+│   ├── light_dome_modeling.py   # Urban light dome falloff models
+│   ├── proximity_analysis.py    # Nearest-city distance metrics
+│   ├── quality_diagnostics.py   # Data quality heatmaps
+│   ├── sensitivity_analysis.py  # CF-threshold sensitivity sweeps
+│   ├── sky_brightness_model.py  # Sky brightness computation + Bortle
+│   ├── stability_metrics.py     # Temporal CV, IQR stability
+│   └── trend_diagnostics.py     # Residual diagnostics (DW, JB, Cook's D)
+│
+├── outputs/                     # Reports, maps, visualizations, downloads
+│   ├── district_reports.py      # Per-district PDF report generation
+│   ├── download_viirs.py        # VIIRS data download / synthetic test data
+│   ├── generate_maps.py         # Publication-quality choropleth maps
+│   ├── generate_reports.py      # Report orchestrator (district + site)
+│   ├── site_reports.py          # Per-site PDF report generation
+│   ├── visualization_suite.py   # Comparison charts, boxplots, quality maps
+│   └── visualizations.py        # Sprawl/differential/darkness animations
+│
+└── site/                        # Site/city-level analysis pipeline
+    ├── site_analysis.py         # Site pipeline entry point + helper functions
+    └── site_pipeline_steps.py   # Site-level step functions
+```
+
 ## Running the Pipeline
 
 There are **4 commands** to run, in order. Steps 1-2 prepare data, steps 3-4 run analysis.
@@ -56,7 +120,7 @@ Download annual composites from [NOAA EOG](https://eogdata.mines.edu/nighttime_l
 **Option B - Synthetic test data** (for pipeline validation):
 
 ```bash
-python3 -m src.download_viirs --generate-test-data --years 2012-2024
+python3 -m src.outputs.download_viirs --generate-test-data --years 2012-2024
 ```
 
 This creates realistic synthetic rasters with urban hotspots (Mumbai, Pune, Nagpur, etc.) and a gradual 8%/yr growth trend, suitable for end-to-end pipeline testing.
@@ -75,10 +139,18 @@ This is the main pipeline. It processes all years (2012-2024) and runs:
 - Graduated percentile classification
 - Publication-quality maps and 36 district PDF reports
 
+To include cross-dataset analysis (e.g., Census 2011 correlations), add the `--datasets` flag:
+
+```bash
+python3 -m src.pipeline_runner --datasets census_2011_pca --census-dir ../census
+```
+
+This runs additional steps 16-20: loading external datasets, merging with VIIRS data, computing Pearson/Spearman/partial correlations, quadrant classification (HH/HL/LH/LL), and cross-dataset summary reports.
+
 ### Step 3: Run the site-level pipeline
 
 ```bash
-python3 -m src.site_analysis
+python3 -m src.site.site_analysis
 ```
 
 Analyzes 5 urban benchmark cities and 11 dark-sky candidate sites using 10 km circular buffers:
@@ -109,13 +181,16 @@ python3 -m venv viirs_env && source viirs_env/bin/activate
 pip install -r requirements.txt
 
 # Generate test data
-python3 -m src.download_viirs --generate-test-data --years 2012-2024
+python3 -m src.outputs.download_viirs --generate-test-data --years 2012-2024
 
 # Run district analysis
 python3 -m src.viirs_process --download-shapefiles
 
 # Run site analysis
-python3 -m src.site_analysis
+python3 -m src.site.site_analysis
+
+# (Optional) Cross-dataset analysis with Census 2011
+python3 -m src.pipeline_runner --datasets census_2011_pca --census-dir ../census
 
 # (Optional) Sensitivity analysis
 python3 scripts/run_sensitivity.py --year 2024

@@ -209,13 +209,14 @@ def step_fit_trends(yearly_df: pd.DataFrame, csv_dir: str) -> tuple[StepResult, 
             log.info("TREND SUMMARY")
             log.info("=" * 60)
             for _, row in trends_df.sort_values("annual_pct_change", ascending=False).iterrows():
+                rad = row["median_radiance_latest"]
                 log.info(
                     "%-20s %+6.2f%% [%+.2f, %+.2f] | %.2f nW (%s)",
                     row["district"],
                     row["annual_pct_change"],
                     row["ci_low"],
                     row["ci_high"],
-                    row["median_radiance_latest"],
+                    rad if rad is not None else 0.0,
                     row["alan_class"],
                 )
 
@@ -255,7 +256,7 @@ def step_stability_analysis(
     yearly_df: pd.DataFrame, csv_dir: str, diagnostics_dir: str
 ) -> tuple[StepResult, pd.DataFrame | None]:
     """Compute temporal stability metrics for each district."""
-    from src.stability_metrics import compute_stability_metrics, plot_stability_scatter
+    from src.analysis.stability_metrics import compute_stability_metrics, plot_stability_scatter
 
     stability_df = None
     error_tb = None
@@ -307,7 +308,7 @@ def step_breakpoint_detection(
     yearly_df: pd.DataFrame, csv_dir: str, diagnostics_dir: str
 ) -> tuple[StepResult, pd.DataFrame | None]:
     """Detect temporal breakpoints in radiance trends."""
-    from src.breakpoint_analysis import analyze_all_breakpoints, plot_breakpoint_timeline
+    from src.analysis.breakpoint_analysis import analyze_all_breakpoints, plot_breakpoint_timeline
 
     breakpoints_df = None
     error_tb = None
@@ -358,7 +359,7 @@ def step_trend_diagnostics(
     yearly_df: pd.DataFrame, csv_dir: str, diagnostics_dir: str
 ) -> tuple[StepResult, pd.DataFrame | None]:
     """Compute trend model diagnostics and generate plots for flagged districts."""
-    from src.trend_diagnostics import compute_all_diagnostics, plot_diagnostic_panel
+    from src.analysis.trend_diagnostics import compute_all_diagnostics, plot_diagnostic_panel
 
     diag_df = None
     error_tb = None
@@ -420,7 +421,7 @@ def step_quality_diagnostics(
     years: list[int], output_dir: str, gdf: gpd.GeoDataFrame, csv_dir: str, diagnostics_dir: str
 ) -> tuple[StepResult, pd.DataFrame | None]:
     """Generate quality reports for each year and consolidate results."""
-    from src.quality_diagnostics import generate_quality_report, plot_quality_heatmap
+    from src.analysis.quality_diagnostics import generate_quality_report, plot_quality_heatmap
 
     quality_df = None
     error_tb = None
@@ -485,7 +486,7 @@ def step_quality_diagnostics(
 
 def step_benchmark_comparison(trends_df: pd.DataFrame, csv_dir: str) -> tuple[StepResult, None]:
     """Compare district trends to benchmark locations."""
-    from src.benchmark_comparison import compare_to_benchmarks
+    from src.analysis.benchmark_comparison import compare_to_benchmarks
 
     error_tb = None
 
@@ -529,7 +530,7 @@ def step_radial_gradient_analysis(
 ) -> tuple[StepResult, pd.DataFrame | None]:
     """Extract radial profiles from urban centers."""
     from src import config
-    from src.gradient_analysis import extract_radial_profiles, plot_radial_decay_curves
+    from src.analysis.gradient_analysis import extract_radial_profiles, plot_radial_decay_curves
 
     profiles_df = None
     error_tb = None
@@ -587,7 +588,7 @@ def step_light_dome_modeling(
     profiles: pd.DataFrame, csv_dir: str, maps_dir: str
 ) -> tuple[StepResult, pd.DataFrame | None]:
     """Model light dome characteristics for urban centers."""
-    from src.light_dome_modeling import model_all_city_domes, plot_dome_comparison
+    from src.analysis.light_dome_modeling import model_all_city_domes, plot_dome_comparison
 
     dome_metrics = None
     error_tb = None
@@ -687,7 +688,7 @@ def step_statewide_visualizations(
     maps_dir: str = None,
 ) -> tuple[StepResult, None]:
     """Generate comprehensive statewide visualization suite."""
-    from src.visualization_suite import (
+    from src.outputs.visualization_suite import (
         create_multi_year_comparison_grid,
         create_growth_classification_map,
         create_enhanced_radiance_heatmap,
@@ -756,7 +757,7 @@ def step_graduated_classification(
     yearly_df: pd.DataFrame, csv_dir: str, maps_dir: str
 ) -> tuple[StepResult, None]:
     """Classify districts by temporal trajectory and tier transitions."""
-    from src.graduated_classification import (
+    from src.analysis.graduated_classification import (
         classify_temporal_trajectory,
         plot_tier_distribution,
         plot_tier_transition_matrix,
@@ -827,7 +828,7 @@ def step_district_reports(
 ) -> tuple[StepResult, None]:
     """Generate individual PDF reports for each district."""
     from src import config
-    from src.district_reports import generate_all_district_reports
+    from src.outputs.district_reports import generate_all_district_reports
 
     error_tb = None
 

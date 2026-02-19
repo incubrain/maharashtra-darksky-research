@@ -270,3 +270,100 @@ EXPECTED_DISTRICT_COUNT = 36
 DEFAULT_SHAPEFILE_PATH = "./data/shapefiles/maharashtra_district.geojson"
 DEFAULT_VIIRS_DIR = "./viirs"
 DEFAULT_OUTPUT_DIR = "./outputs"
+
+# ─── EXTERNAL DATASETS ────────────────────────────────────────────────
+# Toggle datasets for cross-comparison with VNL radiance data.
+# Each entry maps to a module in src/datasets/.
+# Set "enabled": True to include in pipeline runs.
+
+EXTERNAL_DATASETS = {
+    "census_2011": {
+        "enabled": False,  # Off by default — opt-in via --datasets
+        "data_dir": "data/census",
+        "description": "Census of India 2011 PCA (total population)",
+    },
+    "census_2001": {
+        "enabled": False,
+        "data_dir": "data/census",
+        "description": "Census of India 2001 PCA (total population)",
+    },
+    "census_1991": {
+        "enabled": False,
+        "data_dir": "data/census",
+        "description": "Census of India 1991 PCA (total population, urban+rural)",
+    },
+    "census_2011_pca": {
+        "enabled": False,
+        "data_dir": "data/census",
+        "description": "Census of India 2011 PCA (legacy adapter)",
+    },
+    "census_projected": {
+        "enabled": False,
+        "data_dir": "data/census",
+        "description": "Census-based linear projections for VIIRS years (2012-2024)",
+    },
+    # Town-level datasets
+    "census_2011_towns": {
+        "enabled": False,
+        "data_dir": "data/census",
+        "description": "Census of India 2011 PCA — town level (537 towns)",
+    },
+    "census_2001_towns": {
+        "enabled": False,
+        "data_dir": "data/census",
+        "description": "Census of India 2001 PCA — town level (379 towns)",
+    },
+    "census_1991_towns": {
+        "enabled": False,
+        "data_dir": "data/census",
+        "description": "Census of India 1991 PCA — town level (336 towns)",
+    },
+    "census_towns_projected": {
+        "enabled": False,
+        "data_dir": "data/census",
+        "description": "Census-based town-level linear projections (2012-2024)",
+    },
+}
+
+# ── Census common schema ────────────────────────────────────────────
+# Columns present in all three censuses (1991, 2001, 2011).
+# All years use Total (Urban + Rural) population data.
+# Pre-extracted into data/census/census_{year}_pca.csv by
+# scripts/extract_census_csvs.py.
+CENSUS_COMMON_COLUMNS = [
+    "No_HH",       # Households
+    "TOT_P",       # Total population
+    "TOT_M",       # Male population
+    "TOT_F",       # Female population
+    "P_06",        # Population 0-6
+    "P_SC",        # Scheduled Castes
+    "P_ST",        # Scheduled Tribes
+    "P_LIT",       # Literate population
+    "TOT_WORK_P",  # Total workers
+    "MAINWORK_P",  # Main workers
+    "MARGWORK_P",  # Marginal workers
+    "NON_WORK_P",  # Non-workers
+]
+
+# Derived ratios computable from the common columns
+CENSUS_COMMON_DERIVED_RATIOS = {
+    "literacy_rate":    ("P_LIT", "TOT_P"),
+    "workforce_rate":   ("TOT_WORK_P", "TOT_P"),
+    "dependency_ratio": ("NON_WORK_P", "TOT_WORK_P"),
+    "child_ratio":      ("P_06", "TOT_P"),
+    "sc_st_share":      ("P_SC + P_ST", "TOT_P"),
+    "household_size":   ("TOT_P", "No_HH"),
+    "sex_ratio":        ("TOT_F", "TOT_M"),
+}
+
+# Legacy alias kept for backward compatibility
+CENSUS_2011_DISTRICT_COLUMNS = CENSUS_COMMON_COLUMNS
+CENSUS_2011_DERIVED_RATIOS = CENSUS_COMMON_DERIVED_RATIOS
+
+# VNL metrics to correlate against external datasets
+VNL_CORRELATION_METRICS = [
+    "median_radiance",
+    "mean_radiance",
+    "annual_pct_change",
+    "r_squared",
+]

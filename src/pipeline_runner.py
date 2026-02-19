@@ -146,6 +146,12 @@ DISTRICT_STEPS = [
     "statewide_viz",
     "graduated_classification",
     "district_reports",
+    # Cross-dataset steps (gated by --datasets)
+    "load_datasets",
+    "merge_datasets",
+    "cross_correlation",
+    "cross_classification",
+    "cross_dataset_reports",
 ]
 
 
@@ -349,6 +355,60 @@ def run_district_pipeline(args, single_step=None):
     if not result.ok:
         log.warning("District reports failed: %s", result.error)
 
+    # ── Cross-dataset steps (only if datasets enabled) ────────────
+    from src.dataset_aggregator import get_enabled_datasets, get_dataset_suffix
+
+    enabled_datasets = get_enabled_datasets(args)
+
+    if enabled_datasets:
+        from src.cross_dataset_steps import (
+            step_load_datasets,
+            step_merge_datasets,
+            step_cross_correlation,
+            step_cross_classification,
+            step_cross_dataset_reports,
+        )
+
+        suffix = get_dataset_suffix(enabled_datasets)
+        vnl_names = yearly_df["district"].unique().tolist()
+
+        log.info("Cross-dataset analysis: %s (suffix: %s)", enabled_datasets, suffix)
+
+        # Step 16: Load datasets
+        result, datasets = step_load_datasets(
+            enabled_datasets, args, csv_dir, vnl_district_names=vnl_names
+        )
+        pipeline_result.step_results.append(result)
+        if not result.ok:
+            log.warning("Load datasets failed: %s", result.error)
+        else:
+            # Step 17: Merge
+            result, merged = step_merge_datasets(
+                yearly_df, trends_df, datasets, csv_dir, suffix
+            )
+            pipeline_result.step_results.append(result)
+            if result.ok:
+                merged_trends_df = merged["trends"]
+
+                # Step 18: Correlation
+                result, corr_df = step_cross_correlation(
+                    merged_trends_df, datasets, csv_dir, maps_dir, suffix
+                )
+                pipeline_result.step_results.append(result)
+
+                # Step 19: Classification
+                result, class_df = step_cross_classification(
+                    merged_trends_df, datasets, csv_dir, maps_dir, suffix
+                )
+                pipeline_result.step_results.append(result)
+
+                # Step 20: Reports
+                result, _ = step_cross_dataset_reports(
+                    merged_trends_df, corr_df, class_df,
+                    datasets, reports_dir, maps_dir, suffix
+                )
+                pipeline_result.step_results.append(result)
+
     pipeline_result.total_time_seconds = time.time() - start_time
     return pipeline_result
 
@@ -483,6 +543,18 @@ def parse_args():
         "--years",
         default="2012-2024",
         help="Year range or comma-separated years",
+    )
+    parser.add_argument(
+        "--datasets",
+        default=None,
+        help="Comma-separated dataset names to enable (e.g. 'census_2011_pca') "
+             "or 'all' to enable all configured datasets. Overrides config.py.",
+    )
+    parser.add_argument(
+        "--census-dir",
+        default=None,
+        dest="census_dir",
+        help="Override census data directory (default: from config.py)",
     )
     return parser.parse_args()
 

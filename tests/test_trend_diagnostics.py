@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.trend_diagnostics import compute_trend_diagnostics, compute_all_diagnostics
+from src.analysis.trend_diagnostics import compute_trend_diagnostics, compute_all_diagnostics
 
 
 def _make_yearly_df(district, years, radiances):

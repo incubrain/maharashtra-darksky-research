@@ -652,11 +652,17 @@ def generate_maps(gdf, trends_df, yearly_df, output_dir):
     plt.close(fig)
     log.info("Saved: %s", path)
 
-    # 2. Choropleth: Latest median radiance
+    # 2. Choropleth: Latest median radiance (log scale for visibility)
+    import matplotlib.colors as mcolors
     fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+    radiance_col = "median_radiance_latest"
+    # Use log-norm so Mumbai doesn't dominate the color scale
+    vmin = max(gdf_plot[radiance_col].min(), 0.1)
+    vmax = gdf_plot[radiance_col].max()
+    norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
     gdf_plot.plot(
-        column="median_radiance_latest", ax=ax, legend=True,
-        legend_kwds={"label": "Median Radiance (nW/cm²/sr)"},
+        column=radiance_col, ax=ax, legend=True, norm=norm,
+        legend_kwds={"label": "Median Radiance (nW/cm²/sr, log scale)"},
         cmap="YlOrRd", edgecolor="black", linewidth=0.5,
         missing_kwds={"color": "lightgrey", "label": "No data"},
     )

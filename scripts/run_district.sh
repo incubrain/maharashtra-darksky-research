@@ -20,10 +20,10 @@ echo "[1/3] District analysis..."
 python3 -m src.viirs_process "$@"
 
 echo "[2/3] Generating district maps..."
-python3 -m src.generate_maps --type district "$@"
+python3 -m src.outputs.generate_maps --type district "$@"
 
 echo "[3/3] Generating district reports..."
-python3 -m src.generate_reports --type district "$@"
+python3 -m src.outputs.generate_reports --type district "$@"
 
 END_TIME=$(date +%s)
 echo "District pipeline complete in $((END_TIME - START_TIME))s"
