@@ -2,71 +2,43 @@
 District pipeline step functions.
 
 Each function is a discrete, testable pipeline step with explicit
-inputs/outputs and StepResult tracking.
+inputs/outputs and StepResult tracking.  Boilerplate (timing, error
+handling, logging) is handled by ``run_step()``.
 """
 
-import logging
 import os
-import sys
-import traceback
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 
-from src.pipeline_types import StepResult
-from src.logging_config import StepTimer, get_pipeline_logger, log_step_summary
+from src.logging_config import get_pipeline_logger
+from src.step_runner import run_step
 
 log = get_pipeline_logger(__name__)
 
 
-def step_load_boundaries(shapefile_path: str) -> tuple[StepResult, gpd.GeoDataFrame | None]:
+def step_load_boundaries(shapefile_path: str) -> tuple:
     """Load and validate district boundaries."""
     from src import config
     from src.validate_names import validate_or_exit
 
-    gdf = None
-    error_tb = None
+    def _work():
+        gdf = gpd.read_file(shapefile_path)
+        log.info("Loaded boundaries: %d districts", len(gdf))
+        if len(gdf) != config.EXPECTED_DISTRICT_COUNT:
+            log.warning(
+                "Expected %d districts but found %d in %s",
+                config.EXPECTED_DISTRICT_COUNT, len(gdf), shapefile_path,
+            )
+        validate_or_exit(shapefile_path, check_config=True)
+        return gdf
 
-    with StepTimer() as timer:
-        try:
-            gdf = gpd.read_file(shapefile_path)
-            log.info("Loaded boundaries: %d districts", len(gdf))
-
-            # Validate district count
-            if len(gdf) != config.EXPECTED_DISTRICT_COUNT:
-                log.warning(
-                    "Expected %d districts but found %d in %s",
-                    config.EXPECTED_DISTRICT_COUNT, len(gdf), shapefile_path,
-                )
-
-            # Validate district names
-            validate_or_exit(shapefile_path, check_config=True)
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("load_boundaries failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("load_boundaries failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "load_boundaries", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="load_boundaries",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "load_boundaries", "success", input_summary={"shapefile_path": shapefile_path}, output_summary={"districts": len(gdf)}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="load_boundaries",
-        status="success",
+    return run_step(
+        "load_boundaries", _work,
         input_summary={"shapefile_path": shapefile_path},
-        output_summary={"districts": len(gdf)},
-        timing_seconds=timer.elapsed,
-    ), gdf
+        output_summary_fn=lambda gdf: {"districts": len(gdf)},
+    )
 
 
 def step_process_years(
@@ -75,564 +47,308 @@ def step_process_years(
     gdf: gpd.GeoDataFrame,
     output_dir: str,
     cf_threshold: int,
-) -> tuple[StepResult, pd.DataFrame | None]:
+) -> tuple:
     """Process all years and concatenate results."""
     from src.viirs_process import process_single_year
 
-    all_yearly = []
-    error_tb = None
+    def _work():
+        all_yearly = []
+        for year in years:
+            df = process_single_year(year, viirs_dir, gdf, output_dir, cf_threshold)
+            if df is not None:
+                all_yearly.append(df)
 
-    with StepTimer() as timer:
-        try:
-            for year in years:
-                df = process_single_year(year, viirs_dir, gdf, output_dir, cf_threshold)
-                if df is not None:
-                    all_yearly.append(df)
+        if not all_yearly:
+            raise ValueError("No data processed for any year")
 
-            if not all_yearly:
-                error_tb = "No data processed for any year"
-                log.error(error_tb)
-            else:
-                yearly_df = pd.concat(all_yearly, ignore_index=True)
-                log.info(
-                    "Total records: %d (%d years × %d districts)",
-                    len(yearly_df),
-                    yearly_df["year"].nunique(),
-                    yearly_df["district"].nunique(),
-                )
+        yearly_df = pd.concat(all_yearly, ignore_index=True)
+        log.info(
+            "Total records: %d (%d years × %d districts)",
+            len(yearly_df),
+            yearly_df["year"].nunique(),
+            yearly_df["district"].nunique(),
+        )
+        return yearly_df
 
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("process_years failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("process_years failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "process_years", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="process_years",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "process_years", "success", input_summary={"years": years, "viirs_dir": viirs_dir}, output_summary={"total_records": len(yearly_df), "years_processed": yearly_df["year"].nunique(), "districts": yearly_df["district"].nunique()}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="process_years",
-        status="success",
+    return run_step(
+        "process_years", _work,
         input_summary={"years": years, "viirs_dir": viirs_dir},
-        output_summary={
-            "total_records": len(yearly_df),
-            "years_processed": yearly_df["year"].nunique(),
-            "districts": yearly_df["district"].nunique(),
+        output_summary_fn=lambda df: {
+            "total_records": len(df),
+            "years_processed": df["year"].nunique(),
+            "districts": df["district"].nunique(),
         },
-        timing_seconds=timer.elapsed,
-    ), yearly_df
+    )
 
 
-def step_save_yearly_radiance(yearly_df: pd.DataFrame, csv_dir: str) -> tuple[StepResult, str]:
+def step_save_yearly_radiance(yearly_df: pd.DataFrame, csv_dir: str) -> tuple:
     """Save yearly radiance data to CSV."""
-    result_path = None
-    error_tb = None
 
-    with StepTimer() as timer:
-        try:
-            os.makedirs(csv_dir, exist_ok=True)
-            result_path = os.path.join(csv_dir, "districts_yearly_radiance.csv")
-            yearly_df.to_csv(result_path, index=False)
-            log.info("Saved yearly data: %s", result_path)
+    def _work():
+        os.makedirs(csv_dir, exist_ok=True)
+        result_path = os.path.join(csv_dir, "districts_yearly_radiance.csv")
+        yearly_df.to_csv(result_path, index=False)
+        log.info("Saved yearly data: %s", result_path)
+        return result_path
 
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("save_yearly_radiance failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("save_yearly_radiance failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "save_yearly_radiance", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="save_yearly_radiance",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "save_yearly_radiance", "success", input_summary={"records": len(yearly_df)}, output_summary={"csv_path": result_path}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="save_yearly_radiance",
-        status="success",
+    return run_step(
+        "save_yearly_radiance", _work,
         input_summary={"records": len(yearly_df)},
-        output_summary={"csv_path": result_path},
-        timing_seconds=timer.elapsed,
-    ), result_path
+        output_summary_fn=lambda p: {"csv_path": p},
+    )
 
 
-def step_fit_trends(yearly_df: pd.DataFrame, csv_dir: str) -> tuple[StepResult, pd.DataFrame | None]:
+def step_fit_trends(yearly_df: pd.DataFrame, csv_dir: str) -> tuple:
     """Fit log-linear trends per district and classify ALAN levels."""
     from src.viirs_process import fit_log_linear_trend
     from src.formulas.classification import classify_alan
 
-    trends_df = None
-    error_tb = None
+    def _work():
+        districts = yearly_df["district"].unique()
+        trend_results = []
 
-    with StepTimer() as timer:
-        try:
-            districts = yearly_df["district"].unique()
-            trend_results = []
+        for d in districts:
+            result = fit_log_linear_trend(yearly_df, d)
+            latest = yearly_df[yearly_df["district"] == d].sort_values("year").iloc[-1]
+            result["mean_radiance_latest"] = latest["mean_radiance"]
+            result["median_radiance_latest"] = latest["median_radiance"]
+            med = latest["median_radiance"]
+            result["alan_class"] = classify_alan(med)
+            trend_results.append(result)
 
-            for d in districts:
-                result = fit_log_linear_trend(yearly_df, d)
+        trends_df = pd.DataFrame(trend_results)
 
-                # Add latest year radiance
-                latest = yearly_df[yearly_df["district"] == d].sort_values("year").iloc[-1]
-                result["mean_radiance_latest"] = latest["mean_radiance"]
-                result["median_radiance_latest"] = latest["median_radiance"]
+        os.makedirs(csv_dir, exist_ok=True)
+        trends_path = os.path.join(csv_dir, "districts_trends.csv")
+        trends_df.to_csv(trends_path, index=False)
+        log.info("Saved trends: %s", trends_path)
 
-                # Classify ALAN level
-                med = latest["median_radiance"]
-                result["alan_class"] = classify_alan(med)
-
-                trend_results.append(result)
-
-            trends_df = pd.DataFrame(trend_results)
-
-            # Save to CSV
-            os.makedirs(csv_dir, exist_ok=True)
-            trends_path = os.path.join(csv_dir, "districts_trends.csv")
-            trends_df.to_csv(trends_path, index=False)
-            log.info("Saved trends: %s", trends_path)
-
-            # Log summary
-            log.info("\n" + "=" * 60)
-            log.info("TREND SUMMARY")
-            log.info("=" * 60)
-            for _, row in trends_df.sort_values("annual_pct_change", ascending=False).iterrows():
-                rad = row["median_radiance_latest"]
-                log.info(
-                    "%-20s %+6.2f%% [%+.2f, %+.2f] | %.2f nW (%s)",
-                    row["district"],
-                    row["annual_pct_change"],
-                    row["ci_low"],
-                    row["ci_high"],
-                    rad if rad is not None else 0.0,
-                    row["alan_class"],
-                )
-
-            low_alan = trends_df[trends_df["alan_class"] == "low"]
+        log.info("\n" + "=" * 60)
+        log.info("TREND SUMMARY")
+        log.info("=" * 60)
+        for _, row in trends_df.sort_values("annual_pct_change", ascending=False).iterrows():
+            rad = row["median_radiance_latest"]
             log.info(
-                "\nLow-ALAN districts (median < 1 nW/cm²/sr): %s",
-                ", ".join(low_alan["district"].tolist()) if len(low_alan) > 0 else "None",
+                "%-20s %+6.2f%% [%+.2f, %+.2f] | %.2f nW (%s)",
+                row["district"],
+                row["annual_pct_change"],
+                row["ci_low"],
+                row["ci_high"],
+                rad if rad is not None else 0.0,
+                row["alan_class"],
             )
 
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("fit_trends failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("fit_trends failed unexpectedly", exc_info=True)
+        low_alan = trends_df[trends_df["alan_class"] == "low"]
+        log.info(
+            "\nLow-ALAN districts (median < 1 nW/cm²/sr): %s",
+            ", ".join(low_alan["district"].tolist()) if len(low_alan) > 0 else "None",
+        )
+        return trends_df
 
-    if error_tb:
-        log_step_summary(log, "fit_trends", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="fit_trends",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "fit_trends", "success", input_summary={"districts": len(districts)}, output_summary={"trends_computed": len(trends_df)}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="fit_trends",
-        status="success",
-        input_summary={"districts": len(districts)},
-        output_summary={"trends_computed": len(trends_df)},
-        timing_seconds=timer.elapsed,
-    ), trends_df
+    return run_step(
+        "fit_trends", _work,
+        input_summary={"districts": len(yearly_df["district"].unique())},
+        output_summary_fn=lambda df: {"trends_computed": len(df)},
+    )
 
 
 def step_stability_analysis(
     yearly_df: pd.DataFrame, csv_dir: str, diagnostics_dir: str
-) -> tuple[StepResult, pd.DataFrame | None]:
+) -> tuple:
     """Compute temporal stability metrics for each district."""
     from src.analysis.stability_metrics import compute_stability_metrics, plot_stability_scatter
 
-    stability_df = None
-    error_tb = None
+    def _work():
+        os.makedirs(csv_dir, exist_ok=True)
+        os.makedirs(diagnostics_dir, exist_ok=True)
+        stability_df = compute_stability_metrics(
+            yearly_df, entity_col="district",
+            output_csv=os.path.join(csv_dir, "district_stability_metrics.csv"),
+        )
+        plot_stability_scatter(
+            stability_df, entity_col="district",
+            output_path=os.path.join(diagnostics_dir, "stability_scatter.png"),
+        )
+        return stability_df
 
-    with StepTimer() as timer:
-        try:
-            os.makedirs(csv_dir, exist_ok=True)
-            os.makedirs(diagnostics_dir, exist_ok=True)
-
-            stability_df = compute_stability_metrics(
-                yearly_df,
-                entity_col="district",
-                output_csv=os.path.join(csv_dir, "district_stability_metrics.csv"),
-            )
-
-            plot_stability_scatter(
-                stability_df,
-                entity_col="district",
-                output_path=os.path.join(diagnostics_dir, "stability_scatter.png"),
-            )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("stability_analysis failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("stability_analysis failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "stability_analysis", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="stability_analysis",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "stability_analysis", "success", input_summary={"districts": yearly_df["district"].nunique()}, output_summary={"metrics_computed": len(stability_df) if stability_df is not None else 0}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="stability_analysis",
-        status="success",
+    return run_step(
+        "stability_analysis", _work,
         input_summary={"districts": yearly_df["district"].nunique()},
-        output_summary={"metrics_computed": len(stability_df) if stability_df is not None else 0},
-        timing_seconds=timer.elapsed,
-    ), stability_df
+        output_summary_fn=lambda df: {"metrics_computed": len(df) if df is not None else 0},
+    )
 
 
 def step_breakpoint_detection(
     yearly_df: pd.DataFrame, csv_dir: str, diagnostics_dir: str
-) -> tuple[StepResult, pd.DataFrame | None]:
+) -> tuple:
     """Detect temporal breakpoints in radiance trends."""
     from src.analysis.breakpoint_analysis import analyze_all_breakpoints, plot_breakpoint_timeline
 
-    breakpoints_df = None
-    error_tb = None
+    def _work():
+        os.makedirs(csv_dir, exist_ok=True)
+        os.makedirs(diagnostics_dir, exist_ok=True)
+        breakpoints_df = analyze_all_breakpoints(
+            yearly_df, entity_col="district",
+            output_csv=os.path.join(csv_dir, "district_breakpoints.csv"),
+        )
+        plot_breakpoint_timeline(
+            breakpoints_df,
+            output_path=os.path.join(diagnostics_dir, "breakpoint_timeline.png"),
+        )
+        return breakpoints_df
 
-    with StepTimer() as timer:
-        try:
-            os.makedirs(csv_dir, exist_ok=True)
-            os.makedirs(diagnostics_dir, exist_ok=True)
-
-            breakpoints_df = analyze_all_breakpoints(
-                yearly_df,
-                entity_col="district",
-                output_csv=os.path.join(csv_dir, "district_breakpoints.csv"),
-            )
-
-            plot_breakpoint_timeline(
-                breakpoints_df,
-                output_path=os.path.join(diagnostics_dir, "breakpoint_timeline.png"),
-            )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("breakpoint_detection failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("breakpoint_detection failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "breakpoint_detection", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="breakpoint_detection",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "breakpoint_detection", "success", input_summary={"districts": yearly_df["district"].nunique()}, output_summary={"breakpoints_found": len(breakpoints_df) if breakpoints_df is not None else 0}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="breakpoint_detection",
-        status="success",
+    return run_step(
+        "breakpoint_detection", _work,
         input_summary={"districts": yearly_df["district"].nunique()},
-        output_summary={"breakpoints_found": len(breakpoints_df) if breakpoints_df is not None else 0},
-        timing_seconds=timer.elapsed,
-    ), breakpoints_df
+        output_summary_fn=lambda df: {"breakpoints_found": len(df) if df is not None else 0},
+    )
 
 
 def step_trend_diagnostics(
     yearly_df: pd.DataFrame, csv_dir: str, diagnostics_dir: str
-) -> tuple[StepResult, pd.DataFrame | None]:
+) -> tuple:
     """Compute trend model diagnostics and generate plots for flagged districts."""
     from src.analysis.trend_diagnostics import compute_all_diagnostics, plot_diagnostic_panel
 
-    diag_df = None
-    error_tb = None
+    def _work():
+        os.makedirs(csv_dir, exist_ok=True)
+        os.makedirs(diagnostics_dir, exist_ok=True)
+        diag_df = compute_all_diagnostics(
+            yearly_df, entity_col="district",
+            output_csv=os.path.join(csv_dir, "trend_diagnostics.csv"),
+        )
+        for _, row in diag_df.iterrows():
+            r2 = row.get("r_squared", 1.0)
+            outliers = row.get("outlier_years", "")
+            n_outliers = len(outliers.split("; ")) if outliers else 0
+            if (not np.isnan(r2) and r2 < 0.5) or n_outliers > 2:
+                plot_diagnostic_panel(
+                    yearly_df, row["district"], entity_col="district",
+                    output_path=os.path.join(diagnostics_dir, f"{row['district']}_diagnostics.png"),
+                )
+        return diag_df
 
-    with StepTimer() as timer:
-        try:
-            os.makedirs(csv_dir, exist_ok=True)
-            os.makedirs(diagnostics_dir, exist_ok=True)
-
-            diag_df = compute_all_diagnostics(
-                yearly_df,
-                entity_col="district",
-                output_csv=os.path.join(csv_dir, "trend_diagnostics.csv"),
-            )
-
-            # Generate diagnostic plots for flagged districts
-            for _, row in diag_df.iterrows():
-                r2 = row.get("r_squared", 1.0)
-                outliers = row.get("outlier_years", "")
-                n_outliers = len(outliers.split("; ")) if outliers else 0
-
-                if (not np.isnan(r2) and r2 < 0.5) or n_outliers > 2:
-                    plot_diagnostic_panel(
-                        yearly_df,
-                        row["district"],
-                        entity_col="district",
-                        output_path=os.path.join(
-                            diagnostics_dir, f"{row['district']}_diagnostics.png"
-                        ),
-                    )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("trend_diagnostics failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("trend_diagnostics failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "trend_diagnostics", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="trend_diagnostics",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "trend_diagnostics", "success", input_summary={"districts": yearly_df["district"].nunique()}, output_summary={"diagnostics_computed": len(diag_df) if diag_df is not None else 0}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="trend_diagnostics",
-        status="success",
+    return run_step(
+        "trend_diagnostics", _work,
         input_summary={"districts": yearly_df["district"].nunique()},
-        output_summary={"diagnostics_computed": len(diag_df) if diag_df is not None else 0},
-        timing_seconds=timer.elapsed,
-    ), diag_df
+        output_summary_fn=lambda df: {"diagnostics_computed": len(df) if df is not None else 0},
+    )
 
 
 def step_quality_diagnostics(
     years: list[int], output_dir: str, gdf: gpd.GeoDataFrame, csv_dir: str, diagnostics_dir: str
-) -> tuple[StepResult, pd.DataFrame | None]:
+) -> tuple:
     """Generate quality reports for each year and consolidate results."""
     from src.analysis.quality_diagnostics import generate_quality_report, plot_quality_heatmap
 
-    quality_df = None
-    error_tb = None
+    def _work():
+        os.makedirs(csv_dir, exist_ok=True)
+        os.makedirs(diagnostics_dir, exist_ok=True)
 
-    with StepTimer() as timer:
-        try:
-            os.makedirs(csv_dir, exist_ok=True)
-            os.makedirs(diagnostics_dir, exist_ok=True)
-
-            quality_dfs = []
-            for year in years:
-                subset_dir = os.path.join(output_dir, "subsets", str(year))
-                median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
-                lit_path = os.path.join(subset_dir, f"maharashtra_lit_mask_{year}.tif")
-                cf_path = os.path.join(subset_dir, f"maharashtra_cf_cvg_{year}.tif")
-
-                if os.path.exists(median_path):
-                    qdf = generate_quality_report(
-                        median_path,
-                        lit_path,
-                        cf_path,
-                        gdf,
-                        year,
-                        output_csv=None,  # consolidated into quality_all_years.csv
-                    )
-                    quality_dfs.append(qdf)
-
-            if quality_dfs:
-                quality_df = pd.concat(quality_dfs, ignore_index=True)
-                quality_df.to_csv(os.path.join(csv_dir, "quality_all_years.csv"), index=False)
-
-                plot_quality_heatmap(
-                    quality_df,
-                    output_path=os.path.join(diagnostics_dir, "quality_heatmap.png"),
+        quality_dfs = []
+        for year in years:
+            subset_dir = os.path.join(output_dir, "subsets", str(year))
+            median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
+            lit_path = os.path.join(subset_dir, f"maharashtra_lit_mask_{year}.tif")
+            cf_path = os.path.join(subset_dir, f"maharashtra_cf_cvg_{year}.tif")
+            if os.path.exists(median_path):
+                qdf = generate_quality_report(
+                    median_path, lit_path, cf_path, gdf, year, output_csv=None,
                 )
+                quality_dfs.append(qdf)
 
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("quality_diagnostics failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("quality_diagnostics failed unexpectedly", exc_info=True)
+        if quality_dfs:
+            quality_df = pd.concat(quality_dfs, ignore_index=True)
+            quality_df.to_csv(os.path.join(csv_dir, "quality_all_years.csv"), index=False)
+            plot_quality_heatmap(
+                quality_df,
+                output_path=os.path.join(diagnostics_dir, "quality_heatmap.png"),
+            )
+            return quality_df
+        return None
 
-    if error_tb:
-        log_step_summary(log, "quality_diagnostics", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="quality_diagnostics",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "quality_diagnostics", "success", input_summary={"years": len(years)}, output_summary={"reports_generated": len(quality_dfs) if quality_df is not None else 0}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="quality_diagnostics",
-        status="success",
+    return run_step(
+        "quality_diagnostics", _work,
         input_summary={"years": len(years)},
-        output_summary={"reports_generated": len(quality_dfs) if quality_df is not None else 0},
-        timing_seconds=timer.elapsed,
-    ), quality_df
+        output_summary_fn=lambda df: {"reports_generated": len(df) if df is not None else 0},
+    )
 
 
-def step_benchmark_comparison(trends_df: pd.DataFrame, csv_dir: str) -> tuple[StepResult, None]:
+def step_benchmark_comparison(trends_df: pd.DataFrame, csv_dir: str) -> tuple:
     """Compare district trends to benchmark locations."""
     from src.analysis.benchmark_comparison import compare_to_benchmarks
 
-    error_tb = None
+    def _work():
+        os.makedirs(csv_dir, exist_ok=True)
+        compare_to_benchmarks(
+            trends_df,
+            output_csv=os.path.join(csv_dir, "benchmark_comparison.csv"),
+        )
+        return None
 
-    with StepTimer() as timer:
-        try:
-            os.makedirs(csv_dir, exist_ok=True)
-
-            compare_to_benchmarks(
-                trends_df,
-                output_csv=os.path.join(csv_dir, "benchmark_comparison.csv"),
-            )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("benchmark_comparison failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("benchmark_comparison failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "benchmark_comparison", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="benchmark_comparison",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "benchmark_comparison", "success", input_summary={"trends_count": len(trends_df)}, output_summary={}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="benchmark_comparison",
-        status="success",
+    return run_step(
+        "benchmark_comparison", _work,
         input_summary={"trends_count": len(trends_df)},
-        output_summary={},
-        timing_seconds=timer.elapsed,
-    ), None
+    )
 
 
 def step_radial_gradient_analysis(
     output_dir: str, latest_year: int, csv_dir: str, maps_dir: str
-) -> tuple[StepResult, pd.DataFrame | None]:
+) -> tuple:
     """Extract radial profiles from urban centers."""
     from src import config
     from src.analysis.gradient_analysis import extract_radial_profiles, plot_radial_decay_curves
 
-    profiles_df = None
-    error_tb = None
+    def _work():
+        subset_dir = os.path.join(output_dir, "subsets", str(latest_year))
+        median_raster = os.path.join(subset_dir, f"maharashtra_median_{latest_year}.tif")
+        if not os.path.exists(median_raster):
+            log.warning("Median raster not found: %s", median_raster)
+            return None
+        os.makedirs(csv_dir, exist_ok=True)
+        os.makedirs(maps_dir, exist_ok=True)
+        profiles_df = extract_radial_profiles(
+            raster_path=median_raster,
+            city_locations=config.URBAN_CITIES,
+            output_csv=os.path.join(csv_dir, f"urban_radial_profiles_{latest_year}.csv"),
+        )
+        plot_radial_decay_curves(
+            profiles_df,
+            output_path=os.path.join(maps_dir, "urban_radial_profiles.png"),
+        )
+        return profiles_df
 
-    with StepTimer() as timer:
-        try:
-            subset_dir = os.path.join(output_dir, "subsets", str(latest_year))
-            median_raster = os.path.join(subset_dir, f"maharashtra_median_{latest_year}.tif")
-
-            if not os.path.exists(median_raster):
-                error_tb = f"Median raster not found: {median_raster}"
-                log.warning(error_tb)
-            else:
-                os.makedirs(csv_dir, exist_ok=True)
-                os.makedirs(maps_dir, exist_ok=True)
-
-                profiles_df = extract_radial_profiles(
-                    raster_path=median_raster,
-                    city_locations=config.URBAN_CITIES,
-                    output_csv=os.path.join(csv_dir, f"urban_radial_profiles_{latest_year}.csv"),
-                )
-
-                plot_radial_decay_curves(
-                    profiles_df,
-                    output_path=os.path.join(maps_dir, "urban_radial_profiles.png"),
-                )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("radial_gradient_analysis failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("radial_gradient_analysis failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "radial_gradient_analysis", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="radial_gradient_analysis",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "radial_gradient_analysis", "success", input_summary={"year": latest_year}, output_summary={"profiles_extracted": len(profiles_df) if profiles_df is not None else 0}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="radial_gradient_analysis",
-        status="success",
+    return run_step(
+        "radial_gradient_analysis", _work,
         input_summary={"year": latest_year},
-        output_summary={"profiles_extracted": len(profiles_df) if profiles_df is not None else 0},
-        timing_seconds=timer.elapsed,
-    ), profiles_df
+        output_summary_fn=lambda df: {"profiles_extracted": len(df) if df is not None else 0},
+    )
 
 
 def step_light_dome_modeling(
     profiles: pd.DataFrame, csv_dir: str, maps_dir: str
-) -> tuple[StepResult, pd.DataFrame | None]:
+) -> tuple:
     """Model light dome characteristics for urban centers."""
     from src.analysis.light_dome_modeling import model_all_city_domes, plot_dome_comparison
 
-    dome_metrics = None
-    error_tb = None
+    def _work():
+        os.makedirs(csv_dir, exist_ok=True)
+        os.makedirs(maps_dir, exist_ok=True)
+        dome_metrics = model_all_city_domes(
+            profiles,
+            output_csv=os.path.join(csv_dir, "light_dome_metrics.csv"),
+        )
+        plot_dome_comparison(
+            dome_metrics, profiles,
+            output_path=os.path.join(maps_dir, "light_dome_comparison.png"),
+        )
+        return dome_metrics
 
-    with StepTimer() as timer:
-        try:
-            os.makedirs(csv_dir, exist_ok=True)
-            os.makedirs(maps_dir, exist_ok=True)
-
-            dome_metrics = model_all_city_domes(
-                profiles,
-                output_csv=os.path.join(csv_dir, "light_dome_metrics.csv"),
-            )
-
-            plot_dome_comparison(
-                dome_metrics,
-                profiles,
-                output_path=os.path.join(maps_dir, "light_dome_comparison.png"),
-            )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("light_dome_modeling failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("light_dome_modeling failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "light_dome_modeling", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="light_dome_modeling",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "light_dome_modeling", "success", input_summary={"profiles_count": len(profiles)}, output_summary={"domes_modeled": len(dome_metrics) if dome_metrics is not None else 0}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="light_dome_modeling",
-        status="success",
+    return run_step(
+        "light_dome_modeling", _work,
         input_summary={"profiles_count": len(profiles)},
-        output_summary={"domes_modeled": len(dome_metrics) if dome_metrics is not None else 0},
-        timing_seconds=timer.elapsed,
-    ), dome_metrics
+        output_summary_fn=lambda df: {"domes_modeled": len(df) if df is not None else 0},
+    )
 
 
 def step_generate_basic_maps(
@@ -641,42 +357,19 @@ def step_generate_basic_maps(
     yearly_df: pd.DataFrame,
     output_dir: str,
     maps_dir: str = None,
-) -> tuple[StepResult, None]:
+) -> tuple:
     """Generate basic choropleth and time series maps."""
     from src.viirs_process import generate_maps
 
-    error_tb = None
+    def _work():
+        entity_output_dir = os.path.dirname(maps_dir) if maps_dir else output_dir
+        generate_maps(gdf, trends_df, yearly_df, entity_output_dir)
+        return None
 
-    with StepTimer() as timer:
-        try:
-            # Use provided maps_dir or construct entity output dir
-            entity_output_dir = os.path.dirname(maps_dir) if maps_dir else output_dir
-            generate_maps(gdf, trends_df, yearly_df, entity_output_dir)
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("generate_basic_maps failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("generate_basic_maps failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "generate_basic_maps", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="generate_basic_maps",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "generate_basic_maps", "success", input_summary={"districts": len(gdf)}, output_summary={}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="generate_basic_maps",
-        status="success",
+    return run_step(
+        "generate_basic_maps", _work,
         input_summary={"districts": len(gdf)},
-        output_summary={},
-        timing_seconds=timer.elapsed,
-    ), None
+    )
 
 
 def step_statewide_visualizations(
@@ -686,7 +379,7 @@ def step_statewide_visualizations(
     quality_df: pd.DataFrame | None,
     output_dir: str,
     maps_dir: str = None,
-) -> tuple[StepResult, None]:
+) -> tuple:
     """Generate comprehensive statewide visualization suite."""
     from src.outputs.visualization_suite import (
         create_multi_year_comparison_grid,
@@ -695,67 +388,37 @@ def step_statewide_visualizations(
         create_data_quality_map,
     )
 
-    error_tb = None
-
-    with StepTimer() as timer:
-        try:
-            if maps_dir is None:
-                maps_dir = os.path.join(output_dir, "maps")
-            os.makedirs(maps_dir, exist_ok=True)
-
-            create_multi_year_comparison_grid(
-                yearly_df,
-                gdf,
-                output_path=os.path.join(maps_dir, "multi_year_comparison.png"),
+    def _work():
+        target_dir = maps_dir if maps_dir is not None else os.path.join(output_dir, "maps")
+        os.makedirs(target_dir, exist_ok=True)
+        create_multi_year_comparison_grid(
+            yearly_df, gdf,
+            output_path=os.path.join(target_dir, "multi_year_comparison.png"),
+        )
+        create_growth_classification_map(
+            trends_df, gdf,
+            output_path=os.path.join(target_dir, "growth_classification.png"),
+        )
+        create_enhanced_radiance_heatmap(
+            yearly_df,
+            output_path=os.path.join(target_dir, "radiance_heatmap_log.png"),
+        )
+        if quality_df is not None:
+            create_data_quality_map(
+                quality_df, gdf,
+                output_path=os.path.join(target_dir, "data_quality_map.png"),
             )
+        return None
 
-            create_growth_classification_map(
-                trends_df,
-                gdf,
-                output_path=os.path.join(maps_dir, "growth_classification.png"),
-            )
-
-            create_enhanced_radiance_heatmap(
-                yearly_df,
-                output_path=os.path.join(maps_dir, "radiance_heatmap_log.png"),
-            )
-
-            if quality_df is not None:
-                create_data_quality_map(
-                    quality_df,
-                    gdf,
-                    output_path=os.path.join(maps_dir, "data_quality_map.png"),
-                )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("statewide_visualizations failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("statewide_visualizations failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "statewide_visualizations", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="statewide_visualizations",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "statewide_visualizations", "success", input_summary={"districts": len(gdf)}, output_summary={}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="statewide_visualizations",
-        status="success",
+    return run_step(
+        "statewide_visualizations", _work,
         input_summary={"districts": len(gdf)},
-        output_summary={},
-        timing_seconds=timer.elapsed,
-    ), None
+    )
 
 
 def step_graduated_classification(
     yearly_df: pd.DataFrame, csv_dir: str, maps_dir: str
-) -> tuple[StepResult, None]:
+) -> tuple:
     """Classify districts by temporal trajectory and tier transitions."""
     from src.analysis.graduated_classification import (
         classify_temporal_trajectory,
@@ -763,59 +426,32 @@ def step_graduated_classification(
         plot_tier_transition_matrix,
     )
 
-    error_tb = None
-
-    with StepTimer() as timer:
-        try:
-            os.makedirs(csv_dir, exist_ok=True)
-            os.makedirs(maps_dir, exist_ok=True)
-
-            trajectory = classify_temporal_trajectory(
-                yearly_df,
-                output_csv=os.path.join(csv_dir, "graduated_classification.csv"),
+    def _work():
+        os.makedirs(csv_dir, exist_ok=True)
+        os.makedirs(maps_dir, exist_ok=True)
+        trajectory = classify_temporal_trajectory(
+            yearly_df,
+            output_csv=os.path.join(csv_dir, "graduated_classification.csv"),
+        )
+        if not trajectory.empty:
+            plot_tier_distribution(
+                trajectory,
+                output_path=os.path.join(maps_dir, "tier_distribution.png"),
             )
+            first_year = yearly_df["year"].min()
+            latest_year = yearly_df["year"].max()
+            plot_tier_transition_matrix(
+                trajectory, first_year, latest_year,
+                output_path=os.path.join(
+                    maps_dir, f"tier_transitions_{first_year}_{latest_year}.png"
+                ),
+            )
+        return None
 
-            if not trajectory.empty:
-                plot_tier_distribution(
-                    trajectory,
-                    output_path=os.path.join(maps_dir, "tier_distribution.png"),
-                )
-
-                first_year = yearly_df["year"].min()
-                latest_year = yearly_df["year"].max()
-                plot_tier_transition_matrix(
-                    trajectory,
-                    first_year,
-                    latest_year,
-                    output_path=os.path.join(
-                        maps_dir, f"tier_transitions_{first_year}_{latest_year}.png"
-                    ),
-                )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("graduated_classification failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("graduated_classification failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "graduated_classification", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="graduated_classification",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "graduated_classification", "success", input_summary={"districts": yearly_df["district"].nunique()}, output_summary={}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="graduated_classification",
-        status="success",
+    return run_step(
+        "graduated_classification", _work,
         input_summary={"districts": yearly_df["district"].nunique()},
-        output_summary={},
-        timing_seconds=timer.elapsed,
-    ), None
+    )
 
 
 def step_district_reports(
@@ -825,51 +461,26 @@ def step_district_reports(
     gdf: gpd.GeoDataFrame,
     output_dir: str,
     reports_dir: str = None,
-) -> tuple[StepResult, None]:
+) -> tuple:
     """Generate individual PDF reports for each district."""
-    from src import config
     from src.outputs.district_reports import generate_all_district_reports
 
-    error_tb = None
+    def _work():
+        target_dir = reports_dir if reports_dir is not None else os.path.join(output_dir, "district", "reports")
+        os.makedirs(target_dir, exist_ok=True)
+        generate_all_district_reports(
+            yearly_df=yearly_df,
+            trends_df=trends_df,
+            stability_df=stability_df,
+            gdf=gdf,
+            output_dir=target_dir,
+        )
+        return None
 
-    with StepTimer() as timer:
-        try:
-            if reports_dir is None:
-                reports_dir = os.path.join(output_dir, "district", "reports")
-            os.makedirs(reports_dir, exist_ok=True)
-
-            generate_all_district_reports(
-                yearly_df=yearly_df,
-                trends_df=trends_df,
-                stability_df=stability_df,
-                gdf=gdf,
-                output_dir=reports_dir,
-            )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("district_reports failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("district_reports failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "district_reports", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="district_reports",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "district_reports", "success", input_summary={"districts": len(gdf)}, output_summary={}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="district_reports",
-        status="success",
+    return run_step(
+        "district_reports", _work,
         input_summary={"districts": len(gdf)},
-        output_summary={},
-        timing_seconds=timer.elapsed,
-    ), None
+    )
 
 
 def step_animation_frames(
@@ -877,20 +488,8 @@ def step_animation_frames(
     output_dir: str,
     gdf: gpd.GeoDataFrame,
     maps_dir: str = None,
-) -> tuple[StepResult, dict | None]:
-    """Generate animation frames (sprawl, differential, darkness) and trend map.
-
-    Parameters
-    ----------
-    years : list[int]
-        Years to generate frames for.
-    output_dir : str
-        Run-level output directory (contains subsets/).
-    gdf : gpd.GeoDataFrame
-        District boundaries.
-    maps_dir : str, optional
-        Entity-level maps directory. If None, uses output_dir/maps/.
-    """
+) -> tuple:
+    """Generate animation frames (sprawl, differential, darkness) and trend map."""
     from src.outputs.visualizations import (
         generate_sprawl_frames,
         generate_differential_frames,
@@ -898,62 +497,23 @@ def step_animation_frames(
         generate_trend_map,
     )
 
-    frame_counts = None
-    error_tb = None
+    def _work():
+        frame_counts = {}
+        generate_sprawl_frames(years, output_dir, gdf, maps_output_dir=maps_dir)
+        frame_counts["sprawl"] = len(years)
+        generate_differential_frames(years, output_dir, gdf, maps_output_dir=maps_dir)
+        frame_counts["differential"] = len(years)
+        generate_darkness_frames(years, output_dir, gdf, maps_output_dir=maps_dir)
+        frame_counts["darkness"] = len(years)
+        generate_trend_map(years, output_dir, gdf, maps_output_dir=maps_dir)
+        frame_counts["trend_map"] = 1
+        return frame_counts
 
-    with StepTimer() as timer:
-        try:
-            frame_counts = {}
-
-            generate_sprawl_frames(
-                years, output_dir, gdf, maps_output_dir=maps_dir,
-            )
-            frame_counts["sprawl"] = len(years)
-
-            generate_differential_frames(
-                years, output_dir, gdf, maps_output_dir=maps_dir,
-            )
-            frame_counts["differential"] = len(years)
-
-            generate_darkness_frames(
-                years, output_dir, gdf, maps_output_dir=maps_dir,
-            )
-            frame_counts["darkness"] = len(years)
-
-            generate_trend_map(
-                years, output_dir, gdf, maps_output_dir=maps_dir,
-            )
-            frame_counts["trend_map"] = 1
-
-        except (FileNotFoundError, ValueError, KeyError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("animation_frames failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("animation_frames failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "animation_frames", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="animation_frames",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(
-        log, "animation_frames", "success",
+    return run_step(
+        "animation_frames", _work,
         input_summary={"years": len(years)},
-        output_summary=frame_counts,
-        timing_seconds=timer.elapsed,
+        output_summary_fn=lambda counts: counts,
     )
-    return StepResult(
-        step_name="animation_frames",
-        status="success",
-        input_summary={"years": len(years)},
-        output_summary=frame_counts,
-        timing_seconds=timer.elapsed,
-    ), frame_counts
 
 
 def step_per_district_radiance_maps(
@@ -961,57 +521,17 @@ def step_per_district_radiance_maps(
     latest_year: int,
     gdf: gpd.GeoDataFrame,
     maps_dir: str = None,
-) -> tuple[StepResult, int | None]:
-    """Generate per-district zoomed radiance raster maps.
-
-    Parameters
-    ----------
-    output_dir : str
-        Run-level output directory (contains subsets/).
-    latest_year : int
-        Year to render.
-    gdf : gpd.GeoDataFrame
-        District boundaries.
-    maps_dir : str, optional
-        Entity-level maps directory. If None, uses output_dir/maps/.
-    """
+) -> tuple:
+    """Generate per-district zoomed radiance raster maps."""
     from src.outputs.visualizations import generate_per_district_radiance_maps
 
-    count = None
-    error_tb = None
+    def _work():
+        return generate_per_district_radiance_maps(
+            output_dir, latest_year, gdf, maps_output_dir=maps_dir,
+        )
 
-    with StepTimer() as timer:
-        try:
-            count = generate_per_district_radiance_maps(
-                output_dir, latest_year, gdf, maps_output_dir=maps_dir,
-            )
-
-        except (FileNotFoundError, ValueError, KeyError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("per_district_radiance_maps failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("per_district_radiance_maps failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "per_district_radiance_maps", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="per_district_radiance_maps",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(
-        log, "per_district_radiance_maps", "success",
+    return run_step(
+        "per_district_radiance_maps", _work,
         input_summary={"year": latest_year, "districts": len(gdf)},
-        output_summary={"maps_generated": count},
-        timing_seconds=timer.elapsed,
+        output_summary_fn=lambda count: {"maps_generated": count},
     )
-    return StepResult(
-        step_name="per_district_radiance_maps",
-        status="success",
-        input_summary={"year": latest_year, "districts": len(gdf)},
-        output_summary={"maps_generated": count},
-        timing_seconds=timer.elapsed,
-    ), count

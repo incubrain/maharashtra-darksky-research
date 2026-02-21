@@ -5,6 +5,19 @@ VIIRS ALAN analysis pipeline.
 
 ## [Unreleased] - 2026-02-21
 
+### Step Boilerplate Elimination
+
+- **New:** `src/step_runner.py` with `run_step()` function — a generic step
+  executor that encapsulates the ~45-line boilerplate pattern (StepTimer,
+  try/except, log_step_summary, StepResult construction) that was duplicated
+  across every pipeline step function.
+- Refactored `pipeline_steps.py` (1018 → ~330 lines), `site_pipeline_steps.py`
+  (624 → ~280 lines), `cross_dataset_steps.py` (727 → ~380 lines). Each step
+  function now contains only the actual work logic.
+- `generate_maps.py` and `generate_reports.py` now reuse the same step functions
+  used by the pipeline, eliminating duplicated visualization/report logic.
+- Net reduction: ~1,600 lines of boilerplate removed.
+
 ### Pipeline Consolidation
 
 #### Single Entry Point

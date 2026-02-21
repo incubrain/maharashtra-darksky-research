@@ -30,8 +30,9 @@ maharashtra-darksky-research/
 │   │
 │   │   # Pipeline infrastructure
 │   ├── pipeline_types.py              # StepResult, PipelineRunResult (with from_dict)
-│   ├── pipeline_steps.py              # 15 district pipeline step functions
-│   ├── site_pipeline_steps.py         # 12 site/city pipeline step functions
+│   ├── step_runner.py                 # run_step() — generic step executor (timing, errors, logging)
+│   ├── pipeline_steps.py              # 17 district pipeline step functions
+│   ├── cross_dataset_steps.py         # 5 cross-dataset pipeline step functions
 │   ├── pipeline_runner.py             # Orchestrator with Pandera validation + NaN tracking
 │   ├── logging_config.py              # JSON Lines logging with run_id, reset_logging()
 │   ├── schemas.py                     # Pandera DataFrameSchema definitions
@@ -170,11 +171,12 @@ All scientific constants and pure computational functions live here. Source modu
 ### Pipeline Step Functions
 
 Each pipeline step is a discrete function with explicit typed inputs and outputs:
-- **`src/pipeline_steps.py`**: 15 district step functions
-- **`src/site_pipeline_steps.py`**: 12 site/city step functions
+- **`src/pipeline_steps.py`**: 17 district step functions
+- **`src/site/site_pipeline_steps.py`**: 11 site/city step functions
+- **`src/cross_dataset_steps.py`**: 5 cross-dataset analysis step functions
 - Each returns `(StepResult, output_data)` tuple
-- Each uses `StepTimer` for timing and `log_step_summary()` for structured logging
-- Two-tier exception handling: specific exceptions first, catch-all fallback with `exc_info=True`
+- All boilerplate (timing, error handling, logging) is handled by `run_step()` in **`src/step_runner.py`** — step functions only contain the actual work logic
+- `src/outputs/generate_maps.py` and `src/outputs/generate_reports.py` reuse the step functions for standalone CSV-based regeneration (no logic duplication)
 
 ### Structured Logging (`src/logging_config.py`)
 
