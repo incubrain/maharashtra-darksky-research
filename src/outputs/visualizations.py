@@ -2,8 +2,11 @@ import os
 import logging
 import numpy as np
 import rasterio
+import rasterio.mask
+import rasterio.transform
 import matplotlib.pyplot as plt
 import geopandas as gpd
+from shapely.geometry import mapping
 from scipy import stats
 from src import config
 from src import viirs_utils
@@ -34,22 +37,38 @@ def _load_raster(output_dir, year):
     median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
     if not os.path.exists(median_path):
         return None, None
-        
+
     with rasterio.open(median_path) as src:
         data = src.read(1)
         extent = [src.bounds.left, src.bounds.right, src.bounds.bottom, src.bounds.top]
-        
+
     # Dynamic Background Subtraction using central utility
     data = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
-        
+
     return data, extent
 
-def generate_sprawl_frames(years, output_dir, district_gdf, threshold_nw=config.SPRAWL_THRESHOLD_NW):
+def generate_sprawl_frames(years, output_dir, district_gdf,
+                           threshold_nw=config.SPRAWL_THRESHOLD_NW,
+                           maps_output_dir=None):
     """
     Generate frames showing the 'Sprawl' (binary lit vs unlit).
-    threshold_nw: Radiance threshold to consider 'lit' (default 1.5 nW).
+
+    Parameters
+    ----------
+    years : list[int]
+        Years to generate frames for.
+    output_dir : str
+        Run-level directory containing subsets/.
+    district_gdf : gpd.GeoDataFrame
+        District boundaries.
+    threshold_nw : float
+        Radiance threshold to consider 'lit' (default 1.5 nW).
+    maps_output_dir : str, optional
+        Directory for map outputs. Defaults to output_dir/maps/.
     """
-    frame_dir = os.path.join(output_dir, "maps", "frames", "sprawl")
+    if maps_output_dir is None:
+        maps_output_dir = os.path.join(output_dir, "maps")
+    frame_dir = os.path.join(maps_output_dir, "frames", "sprawl")
     os.makedirs(frame_dir, exist_ok=True)
     log.info("Generating Sprawl frames in %s...", frame_dir)
 
@@ -59,32 +78,19 @@ def generate_sprawl_frames(years, output_dir, district_gdf, threshold_nw=config.
 
         # Binary mask
         lit_mask = (data >= threshold_nw)
-        # Calculate area stats (approximate, assuming ~500m pixels depending on projection, 
-        # but pure pixel count is fine for relative story or we use metadata if strictly needed.
-        # VNP46A4 is ~15 arc-seconds ~460m. 
-        # Let's just report pixel count or % of state for now to be safe/simple.)
         total_pixels = np.sum(np.isfinite(data))
         lit_pixels = np.sum(lit_mask)
         lit_pct = (lit_pixels / total_pixels * 100) if total_pixels > 0 else 0
 
         fig, ax = _setup_plot(district_gdf)
-        
-        # Plot: 0 is black/transparent, 1 is Yellow
-        # We allow the district boundary to show the shape
-        # imshow with transparency for unlit
-        
+
         # Create an RGBA image
         rows, cols = data.shape
         img = np.zeros((rows, cols, 4))
         img[lit_mask] = [1, 0.9, 0.2, 1] # Yellow for lit
-        # Unlit stays transparent [0,0,0,0]
-        
+
         ax.imshow(img, extent=extent, origin="upper", zorder=1)
-        ax.set_title(f"Urban Sprawl (Lit Area > {threshold_nw} nW)", fontsize=16, color='black') # title might need contrasting color depending on bg. 
-        # Actually standard mpl bg is white, but these frames usually look good with dark theme?
-        # Let's stick to standard map style but maybe dark background for impact?
-        # User liked previous frames which were black bg.
-        
+
         fig.patch.set_facecolor('black')
         ax.set_title(f"Urban Sprawl (Lit > {threshold_nw} nW) - {year}", fontsize=16, color='white')
 
@@ -94,17 +100,31 @@ def generate_sprawl_frames(years, output_dir, district_gdf, threshold_nw=config.
             f"(Threshold: {threshold_nw} nW/cm²/sr)"
         )
         _add_annotation(ax, text)
-        
+
         path = os.path.join(frame_dir, f"sprawl_{year}.png")
         fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight", facecolor='black')
         plt.close(fig)
         log.info("Generated: %s", path)
 
-def generate_differential_frames(years, output_dir, district_gdf):
+def generate_differential_frames(years, output_dir, district_gdf,
+                                 maps_output_dir=None):
     """
-    Generate frames showing (Current Year - Baseline 2012).
+    Generate frames showing (Current Year - Baseline).
+
+    Parameters
+    ----------
+    years : list[int]
+        Years to generate frames for.
+    output_dir : str
+        Run-level directory containing subsets/.
+    district_gdf : gpd.GeoDataFrame
+        District boundaries.
+    maps_output_dir : str, optional
+        Directory for map outputs. Defaults to output_dir/maps/.
     """
-    frame_dir = os.path.join(output_dir, "maps", "frames", "differential")
+    if maps_output_dir is None:
+        maps_output_dir = os.path.join(output_dir, "maps")
+    frame_dir = os.path.join(maps_output_dir, "frames", "differential")
     os.makedirs(frame_dir, exist_ok=True)
     log.info("Generating Differential frames in %s...", frame_dir)
 
@@ -119,48 +139,57 @@ def generate_differential_frames(years, output_dir, district_gdf):
         if data is None: continue
 
         diff = data - base_data
-        
+
         # Determine stats
         net_increase = np.nanmean(diff)
-        
+
         fig, ax = _setup_plot(district_gdf)
         fig.patch.set_facecolor('black')
-        
-        # Plot difference. 
-        # vmin/vmax symmetric to show decrease too
-        # Use simple limits like -20 to +20 nW or dynamic?
-        # Light pollution can grow a lot. Let's try log scale difference? 
-        # Or simple linear with SymLogNorm.
-        # For visuals, linear clipped usually looks like "fire".
-        
+
         im = ax.imshow(diff, extent=extent, cmap="RdBu_r", vmin=-5, vmax=5,
                        origin="upper", aspect="auto")
-        
+
         text = (
             f"Year: {year}\n"
             f"New Light vs {baseline_year}\n"
             f"Net Change: {net_increase:+.2f} nW"
         )
         _add_annotation(ax, text)
-        
+
         cbar = plt.colorbar(im, ax=ax, shrink=0.6, label="Difference (nW/cm²/sr)")
         cbar.ax.yaxis.set_tick_params(color='white')
         plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
         cbar.set_label("Change vs 2012 (nW/cm²/sr)", color='white')
-        
+
         ax.set_title(f"New Light: {year} vs {baseline_year}", fontsize=16, color='white')
-        
+
         path = os.path.join(frame_dir, f"diff_{year}.png")
         fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight", facecolor='black')
         plt.close(fig)
         log.info("Generated: %s", path)
 
-def generate_darkness_frames(years, output_dir, district_gdf, threshold_nw=config.DARKNESS_THRESHOLD_NW):
+def generate_darkness_frames(years, output_dir, district_gdf,
+                             threshold_nw=config.DARKNESS_THRESHOLD_NW,
+                             maps_output_dir=None):
     """
     Generate frames showing 'Erosion of Darkness' (pixels < threshold).
-    threshold_nw: Dark sky threshold (default 0.25 nW - 'Pristine').
+
+    Parameters
+    ----------
+    years : list[int]
+        Years to generate frames for.
+    output_dir : str
+        Run-level directory containing subsets/.
+    district_gdf : gpd.GeoDataFrame
+        District boundaries.
+    threshold_nw : float
+        Dark sky threshold (default 0.25 nW - 'Pristine').
+    maps_output_dir : str, optional
+        Directory for map outputs. Defaults to output_dir/maps/.
     """
-    frame_dir = os.path.join(output_dir, "maps", "frames", "darkness")
+    if maps_output_dir is None:
+        maps_output_dir = os.path.join(output_dir, "maps")
+    frame_dir = os.path.join(maps_output_dir, "frames", "darkness")
     os.makedirs(frame_dir, exist_ok=True)
     log.info("Generating Darkness frames in %s...", frame_dir)
 
@@ -169,26 +198,22 @@ def generate_darkness_frames(years, output_dir, district_gdf, threshold_nw=confi
         if data is None: continue
 
         # Dark mask
-        dark_mask = (data < threshold_nw) & (data > 0) # Exclude nodata(0 or -999) if any, assuming >0 is valid data
-        
+        dark_mask = (data < threshold_nw) & (data > 0)
+
         total_pixels = np.sum(np.isfinite(data))
         dark_pixels = np.sum(dark_mask)
         dark_pct = (dark_pixels / total_pixels * 100) if total_pixels > 0 else 0
 
         fig, ax = _setup_plot(district_gdf)
         fig.patch.set_facecolor('black')
-        
-        # Color dark areas Green/Blue, rest is black (transparent) or dark grey
+
         img = np.zeros((data.shape[0], data.shape[1], 4))
-        # Dark areas = Greenish Blue
-        img[dark_mask] = [0.0, 0.8, 0.6, 1.0] 
-        # Lit areas = slightly visible grey to show context? Or just black?
-        # Let's make lit areas dark grey
+        img[dark_mask] = [0.0, 0.8, 0.6, 1.0]
         lit_mask = (data >= threshold_nw)
         img[lit_mask] = [0.2, 0.2, 0.2, 1.0]
-        
+
         ax.imshow(img, extent=extent, origin="upper")
-        
+
         text = (
             f"Year: {year}\n"
             f"Dark Reservoirs: {dark_pct:.1f}%\n"
@@ -196,25 +221,36 @@ def generate_darkness_frames(years, output_dir, district_gdf, threshold_nw=confi
         )
         _add_annotation(ax, text)
         ax.set_title(f"Erosion of Darkness ({year})", fontsize=16, color='white')
-        
+
         path = os.path.join(frame_dir, f"darkness_{year}.png")
         fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight", facecolor='black')
         plt.close(fig)
         log.info("Generated: %s", path)
 
-def generate_trend_map(years, output_dir, district_gdf):
+def generate_trend_map(years, output_dir, district_gdf, maps_output_dir=None):
     """
     Generate pixel-wise linear trend map (slope of radiance over years).
+
+    Parameters
+    ----------
+    years : list[int]
+        Years to compute trend across.
+    output_dir : str
+        Run-level directory containing subsets/.
+    district_gdf : gpd.GeoDataFrame
+        District boundaries.
+    maps_output_dir : str, optional
+        Directory for map outputs. Defaults to output_dir/maps/.
     """
-    maps_dir = os.path.join(output_dir, "maps")
-    os.makedirs(maps_dir, exist_ok=True)
+    if maps_output_dir is None:
+        maps_output_dir = os.path.join(output_dir, "maps")
+    os.makedirs(maps_output_dir, exist_ok=True)
     log.info("Generating Trend Map...")
 
     # Load all years into a stack
     stack = []
     valid_years = []
-    
-    # Needs valid extent from first frame
+
     ref_raster, extent = _load_raster(output_dir, years[0])
     if ref_raster is None: return
 
@@ -223,61 +259,161 @@ def generate_trend_map(years, output_dir, district_gdf):
         if data is not None:
             stack.append(data)
             valid_years.append(year)
-    
+
     if not stack:
         return
 
     stack_arr = np.array(stack) # (T, H, W)
-    
-    # Calculate slope per pixel
-    # Vectorized regression is memory intensive for large images.
-    # Simple approach: polyfit along axis 0
+
     x = np.array(valid_years)
     x = x - x[0] # Time delta
-    
-    # Mask nan
-    # We'll compute slope only where we have data
-    # (Ignoring complex nan handling for speed, assuming stacks are consistent)
-    
-    # numpy polyfit is fast enough for standard images (e.g. 2k x 2k)
-    # slope is index 0 of result
+
     log.info("Computing regression slope for %s pixels...", stack_arr.shape)
-    
-    # Reshape to (T, N)
+
     T, H, W = stack_arr.shape
     reshaped = stack_arr.reshape(T, -1)
-    
-    # Check for NaNs
-    # Just fill NaNs with 0 for trend calculation or handle properly?
-    # Better to mask. For map, we want simple visual.
-    
-    # Fast vectorized slope:
-    # slope = cov(x, y) / var(x)
+
+    # Fast vectorized slope: slope = cov(x, y) / var(x)
     x_mean = np.mean(x)
     y_mean = np.mean(reshaped, axis=0)
     numerator = np.sum((x[:, None] - x_mean) * (reshaped - y_mean), axis=0)
     denominator = np.sum((x[:, None] - x_mean)**2, axis=0)
     slope = numerator / denominator
     slope_map = slope.reshape(H, W)
-    
+
     fig, ax = _setup_plot(district_gdf)
     fig.patch.set_facecolor('black')
-    
-    # Plot slope
-    # Positive (Red) = Growing
-    # Negative (Blue) = Shrinking
-    
+
     im = ax.imshow(slope_map, extent=extent, cmap="coolwarm", vmin=-2, vmax=2,
                    origin="upper", aspect="auto")
-    
+
     cbar = plt.colorbar(im, ax=ax, shrink=0.6, label="Rate of Change (nW/year)")
     cbar.ax.yaxis.set_tick_params(color='white')
     plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
     cbar.set_label("Trend Slope (nW/year)", color='white')
-    
+
     ax.set_title(f"Light Pollution Growth Trend ({years[0]}-{years[-1]})", fontsize=16, color='white')
-    
-    path = os.path.join(maps_dir, "alan_trend_map.png")
+
+    path = os.path.join(maps_output_dir, "alan_trend_map.png")
     fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight", facecolor='black')
     plt.close(fig)
     log.info("Saved Trend Map: %s", path)
+
+
+def generate_per_district_radiance_maps(output_dir, year, district_gdf,
+                                        maps_output_dir=None):
+    """Generate zoomed-in radiance raster maps clipped to each district.
+
+    For each district, clips the median raster to the district boundary and
+    renders a zoomed-in map showing actual raster radiance values.
+
+    Parameters
+    ----------
+    output_dir : str
+        Run-level directory containing subsets/.
+    year : int
+        Year to render (typically the latest).
+    district_gdf : gpd.GeoDataFrame
+        District boundaries with 'district' column.
+    maps_output_dir : str, optional
+        Where to write maps. Defaults to output_dir/maps/.
+
+    Returns
+    -------
+    int
+        Number of district maps generated.
+    """
+    if maps_output_dir is None:
+        maps_output_dir = os.path.join(output_dir, "maps")
+
+    district_maps_dir = os.path.join(maps_output_dir, "districts")
+    os.makedirs(district_maps_dir, exist_ok=True)
+
+    subset_dir = os.path.join(output_dir, "subsets", str(year))
+    median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
+
+    if not os.path.exists(median_path):
+        log.warning("No raster data for year %d: %s", year, median_path)
+        return 0
+
+    count = 0
+    for _, row in district_gdf.iterrows():
+        district_name = row["district"]
+        try:
+            # Clip raster to district boundary
+            with rasterio.open(median_path) as src:
+                geom = [mapping(row.geometry)]
+                clipped, clipped_transform = rasterio.mask.mask(
+                    src, geom, crop=True, filled=True, nodata=np.nan
+                )
+                clipped_data = clipped[0]
+                clipped_bounds = rasterio.transform.array_bounds(
+                    clipped_data.shape[0], clipped_data.shape[1], clipped_transform
+                )
+
+            # Apply DBS
+            clipped_data = viirs_utils.apply_dynamic_background_subtraction(
+                clipped_data, year=year
+            )
+
+            clipped_extent = [
+                clipped_bounds[0], clipped_bounds[2],
+                clipped_bounds[1], clipped_bounds[3],
+            ]
+
+            fig, ax = plt.subplots(figsize=(10, 9))
+            fig.patch.set_facecolor('black')
+
+            # Log-scale for visibility
+            display_data = np.log10(np.clip(clipped_data, 0.01, None))
+            display_data = np.where(np.isfinite(display_data), display_data, np.nan)
+
+            im = ax.imshow(
+                display_data, extent=clipped_extent, cmap="magma",
+                vmin=-2, vmax=2, origin="upper", aspect="auto"
+            )
+
+            # Overlay district boundary
+            single_gdf = district_gdf[
+                district_gdf["district"] == district_name
+            ]
+            single_gdf.boundary.plot(
+                ax=ax, edgecolor="white", linewidth=1.0, alpha=0.8
+            )
+
+            cbar = plt.colorbar(im, ax=ax, shrink=0.6)
+            cbar.ax.yaxis.set_tick_params(color='white')
+            plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+            cbar.set_label("log\u2081\u2080(Radiance nW/cm\u00b2/sr)", color='white')
+
+            ax.set_title(
+                f"{district_name}: Nighttime Radiance ({year})",
+                fontsize=14, color='white'
+            )
+            ax.set_axis_off()
+            plt.tight_layout()
+
+            safe_name = district_name.lower().replace(" ", "_")
+            path = os.path.join(
+                district_maps_dir, f"{safe_name}_radiance.png"
+            )
+            fig.savefig(
+                path, dpi=config.MAP_DPI, bbox_inches="tight",
+                facecolor='black'
+            )
+            plt.close(fig)
+            count += 1
+
+        except Exception as exc:
+            log.warning(
+                "Failed to generate radiance map for %s: %s",
+                district_name, exc
+            )
+            plt.close("all")
+            continue
+
+    log.info(
+        "Generated %d per-district radiance maps in %s",
+        count, district_maps_dir
+    )
+    return count

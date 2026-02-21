@@ -14,7 +14,35 @@ import json
 import logging
 import os
 import time
+import uuid
 from logging.handlers import RotatingFileHandler
+
+
+# Module-level run_id bound to every log entry via RunIdFilter.
+_run_id = None
+
+
+def get_run_id():
+    """Return the current pipeline run_id, generating one if needed."""
+    global _run_id
+    if _run_id is None:
+        _run_id = str(uuid.uuid4())[:8]
+    return _run_id
+
+
+def set_run_id(run_id=None):
+    """Set (or regenerate) the pipeline run_id."""
+    global _run_id
+    _run_id = run_id or str(uuid.uuid4())[:8]
+    return _run_id
+
+
+class RunIdFilter(logging.Filter):
+    """Inject run_id into every log record."""
+
+    def filter(self, record):
+        record.run_id = get_run_id()
+        return True
 
 
 class JsonFormatter(logging.Formatter):
@@ -22,16 +50,18 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record):
         entry = {
-            "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.") +
+                         f"{int(record.msecs):03d}",
             "level": record.levelname,
             "module": record.module,
             "function": record.funcName,
             "line": record.lineno,
+            "run_id": getattr(record, "run_id", None),
             "message": record.getMessage(),
         }
         # Include structured extra fields if present.
         for key in ("step_name", "input_summary", "output_summary",
-                     "timing_seconds", "record_count", "warnings"):
+                     "timing_seconds", "nan_summary", "warnings"):
             if hasattr(record, key):
                 entry[key] = getattr(record, key)
         return json.dumps(entry, default=str)
@@ -52,7 +82,7 @@ _configured = False
 _run_dir_handler = None
 
 
-def setup_logging(run_dir=None, console_level=logging.INFO, file_level=logging.DEBUG):
+def setup_logging(run_dir=None, console_level=None, file_level=logging.DEBUG):
     """Configure root logger with console and optional file handlers.
 
     Call once at pipeline entry point. Subsequent calls are no-ops unless
@@ -63,17 +93,24 @@ def setup_logging(run_dir=None, console_level=logging.INFO, file_level=logging.D
     run_dir : str, optional
         Directory for per-run log file. If provided, creates
         ``{run_dir}/pipeline.jsonl`` with JSON Lines at file_level.
-    console_level : int
-        Console handler log level. Default: INFO.
+    console_level : int, optional
+        Console handler log level. Default: from LOG_LEVEL env var or INFO.
     file_level : int
         File handler log level. Default: DEBUG.
     """
     global _configured, _run_dir_handler
 
+    if console_level is None:
+        env_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+        console_level = getattr(logging, env_level, logging.INFO)
+
     root = logging.getLogger()
 
     if not _configured:
         root.setLevel(logging.DEBUG)
+
+        # Add run_id filter to root logger.
+        root.addFilter(RunIdFilter())
 
         # Console handler: human-readable at INFO.
         console = logging.StreamHandler()
@@ -103,6 +140,26 @@ def setup_logging(run_dir=None, console_level=logging.INFO, file_level=logging.D
         fh.setFormatter(JsonFormatter())
         root.addHandler(fh)
         _run_dir_handler = fh
+
+
+def reset_logging():
+    """Reset all logging state — primarily for test isolation.
+
+    Removes all handlers and filters from the root logger so the next
+    call to setup_logging() or get_pipeline_logger() starts fresh.
+    """
+    global _configured, _run_dir_handler, _run_id
+
+    root = logging.getLogger()
+    for handler in root.handlers[:]:
+        handler.close()
+        root.removeHandler(handler)
+    for f in root.filters[:]:
+        root.removeFilter(f)
+
+    _configured = False
+    _run_dir_handler = None
+    _run_id = None
 
 
 def get_pipeline_logger(name, run_dir=None):

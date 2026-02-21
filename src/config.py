@@ -127,8 +127,6 @@ URBAN_CITIES = {
     "Udgir":            {"lat": 18.3926, "lon": 77.1161, "district": "Latur"},
     "Hinganghat":       {"lat": 20.5490, "lon": 78.8360, "district": "Wardha"},
 }
-# Backwards-compatible alias
-URBAN_BENCHMARKS = URBAN_CITIES
 
 # Dark-sky candidate sites: protected areas, reserves, remote villages
 DARKSKY_SITES = {
@@ -210,15 +208,6 @@ TIMESERIES_HIGHLIGHT_DISTRICTS = [
 
 # ─── OUTPUT PATHS ─────────────────────────────────────────────────────────
 import os
-
-OUTPUT_DIRS = {
-    "csv": "csv",
-    "maps": "maps",
-    "subsets": "subsets",
-    "district_reports": "district_reports",
-    "site_reports": "site_reports",
-    "diagnostics": "diagnostics",
-}
 
 
 def get_entity_dirs(base_dir, entity_type):
@@ -356,9 +345,6 @@ CENSUS_COMMON_DERIVED_RATIOS = {
     "sex_ratio":        ("TOT_F", "TOT_M"),
 }
 
-# Legacy alias kept for backward compatibility
-CENSUS_2011_DISTRICT_COLUMNS = CENSUS_COMMON_COLUMNS
-CENSUS_2011_DERIVED_RATIOS = CENSUS_COMMON_DERIVED_RATIOS
 
 # VNL metrics to correlate against external datasets
 VNL_CORRELATION_METRICS = [

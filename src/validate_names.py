@@ -40,7 +40,7 @@ def get_csv_districts(csv_paths):
 def get_config_districts():
     """Extract district names referenced in config location dicts."""
     districts = set()
-    for info in config.URBAN_BENCHMARKS.values():
+    for info in config.URBAN_CITIES.values():
         districts.add(info["district"])
     for info in config.DARKSKY_SITES.values():
         districts.add(info["district"])

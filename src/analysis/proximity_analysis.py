@@ -53,7 +53,7 @@ def compute_nearest_city_distances(site_locations=None, city_locations=None,
 
     Args:
         site_locations: Dict from config.DARKSKY_SITES (default).
-        city_locations: Dict from config.URBAN_BENCHMARKS (default).
+        city_locations: Dict from config.URBAN_CITIES (default).
         output_csv: Path to save results (optional).
 
     Returns:
@@ -63,7 +63,7 @@ def compute_nearest_city_distances(site_locations=None, city_locations=None,
     if site_locations is None:
         site_locations = config.DARKSKY_SITES
     if city_locations is None:
-        city_locations = config.URBAN_BENCHMARKS
+        city_locations = config.URBAN_CITIES
 
     results = []
     for site_name, site_info in site_locations.items():
