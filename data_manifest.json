@@ -1716,6 +1716,123 @@
         "use_lit_mask": true,
         "use_cf_filter": true
       }
+    },
+    {
+      "date": "2026-02-21T14:25:27",
+      "year_processed": 2012,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:26:09",
+      "year_processed": 2013,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:26:39",
+      "year_processed": 2014,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:27:16",
+      "year_processed": 2015,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:28:00",
+      "year_processed": 2016,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:28:40",
+      "year_processed": 2017,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:29:17",
+      "year_processed": 2018,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:29:57",
+      "year_processed": 2019,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:30:34",
+      "year_processed": 2020,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:31:12",
+      "year_processed": 2021,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:31:51",
+      "year_processed": 2022,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:32:30",
+      "year_processed": 2023,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
+    },
+    {
+      "date": "2026-02-21T14:33:08",
+      "year_processed": 2024,
+      "config_snapshot": {
+        "cf_threshold": 5,
+        "use_lit_mask": true,
+        "use_cf_filter": true
+      }
     }
   ]
 }
