@@ -244,6 +244,66 @@ def output_dir_structure(tmp_dir):
     return {"base_dir": tmp_dir, "entities": entities}
 
 
+@pytest.fixture(autouse=True)
+def logging_reset():
+    """Reset logging state between tests to prevent handler accumulation."""
+    from src.logging_config import reset_logging
+    reset_logging()
+    yield
+    reset_logging()
+
+
+@pytest.fixture
+def mock_args(tmp_dir):
+    """Provide an argparse.Namespace with pipeline default arguments."""
+    import argparse
+
+    output_dir = os.path.join(tmp_dir, "outputs")
+    os.makedirs(output_dir, exist_ok=True)
+
+    return argparse.Namespace(
+        pipeline="district",
+        step=None,
+        viirs_dir=os.path.join(tmp_dir, "viirs"),
+        shapefile_path=os.path.join(tmp_dir, "test.geojson"),
+        output_dir=output_dir,
+        cf_threshold=5,
+        years="2020-2022",
+        datasets=None,
+        census_dir=None,
+        strict_validation=False,
+        compare_run=None,
+    )
+
+
+@pytest.fixture
+def all_nan_rasters(tmp_dir):
+    """Rasters where all pixels are NaN — for error path testing."""
+    nan_data = np.full((HEIGHT, WIDTH), np.nan, dtype="float32")
+    lit_data = np.ones((HEIGHT, WIDTH), dtype="float32")
+    cf_data = np.full((HEIGHT, WIDTH), 10.0, dtype="float32")
+
+    median_path = _write_raster(os.path.join(tmp_dir, "nan_median.tif"), nan_data)
+    lit_path = _write_raster(os.path.join(tmp_dir, "nan_lit_mask.tif"), lit_data)
+    cf_path = _write_raster(os.path.join(tmp_dir, "nan_cf_cvg.tif"), cf_data)
+
+    return {"median": median_path, "lit_mask": lit_path, "cf_cvg": cf_path}
+
+
+@pytest.fixture
+def zero_pixel_rasters(tmp_dir):
+    """Rasters where all pixels are zero — edge case for quality filter."""
+    zero_data = np.zeros((HEIGHT, WIDTH), dtype="float32")
+    lit_data = np.ones((HEIGHT, WIDTH), dtype="float32")
+    cf_data = np.full((HEIGHT, WIDTH), 10.0, dtype="float32")
+
+    median_path = _write_raster(os.path.join(tmp_dir, "zero_median.tif"), zero_data)
+    lit_path = _write_raster(os.path.join(tmp_dir, "zero_lit_mask.tif"), lit_data)
+    cf_path = _write_raster(os.path.join(tmp_dir, "zero_cf_cvg.tif"), cf_data)
+
+    return {"median": median_path, "lit_mask": lit_path, "cf_cvg": cf_path}
+
+
 @pytest.fixture
 def site_gdf():
     """GeoDataFrame with two test sites: one city, one dark-sky site."""

@@ -260,3 +260,65 @@ class TestPipelineTypesIntegration:
         d = run.to_dict()
         json_str = json.dumps(d)
         assert "district" in json_str
+
+    def test_pipeline_run_result_has_git_sha(self):
+        from src.pipeline_types import PipelineRunResult
+
+        run = PipelineRunResult(entity_type="district")
+        d = run.to_dict()
+        # git_sha may be None if not in a git repo, but the field must exist
+        assert "git_sha" in d
+
+    def test_pipeline_run_result_has_started_at(self):
+        from src.pipeline_types import PipelineRunResult
+
+        run = PipelineRunResult(entity_type="district")
+        d = run.to_dict()
+        assert "started_at" in d
+        assert d["started_at"] != ""
+
+
+# ── Logging Infrastructure ──────────────────────────────────────────────
+
+
+class TestLoggingInfrastructure:
+    """Logging configuration and reset behaviour."""
+
+    def test_reset_logging_clears_handlers(self):
+        import logging
+        from src.logging_config import setup_logging, reset_logging
+
+        reset_logging()
+        setup_logging()
+        root = logging.getLogger()
+        assert len(root.handlers) > 0
+
+        reset_logging()
+        assert len(root.handlers) == 0
+
+    def test_run_id_is_set(self):
+        from src.logging_config import set_run_id, get_run_id
+
+        rid = set_run_id("test123")
+        assert get_run_id() == "test123"
+
+    def test_run_id_auto_generates(self):
+        from src.logging_config import reset_logging, get_run_id
+
+        reset_logging()  # clears _run_id
+        rid = get_run_id()
+        assert len(rid) == 8  # uuid4 short form
+
+    def test_log_level_env_var(self, monkeypatch):
+        """LOG_LEVEL env var should control console handler level."""
+        import logging
+        from src.logging_config import reset_logging, setup_logging
+
+        reset_logging()
+        monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+        setup_logging()
+        root = logging.getLogger()
+        console_handler = [h for h in root.handlers if isinstance(h, logging.StreamHandler)
+                          and not isinstance(h, logging.FileHandler)]
+        assert len(console_handler) > 0
+        assert console_handler[0].level == logging.DEBUG

@@ -3,10 +3,13 @@
 Pipeline runner with validation gates and single-step execution.
 
 Orchestrates the full analysis pipeline with:
-- Validation between steps (column checks, NaN detection, shape verification)
+- Pandera schema validation between steps (structure + data quality)
+- NaN propagation tracking between steps
 - ``--step`` CLI flag to run a single step from saved intermediate CSV
+- ``--strict-validation`` flag to abort on schema violations
 - Entity-aware output routing (district/city/site subdirectories)
 - Full PipelineRunResult provenance saved as JSON
+- Diagnostic report generation at the end of each run
 
 Usage:
     # Run full pipeline
@@ -17,6 +20,9 @@ Usage:
 
     # Run site pipeline for dark-sky sites only
     python3 -m src.pipeline_runner --pipeline site --years 2012-2024
+
+    # Run with strict validation (abort on schema violations)
+    python3 -m src.pipeline_runner --pipeline district --strict-validation
 """
 
 import argparse
@@ -30,101 +36,87 @@ import pandas as pd
 
 from src import config
 from src.config import get_entity_dirs
-from src.logging_config import StepTimer, get_pipeline_logger, setup_logging
+from src.logging_config import StepTimer, get_pipeline_logger, setup_logging, set_run_id
 from src.pipeline_types import PipelineRunResult, StepResult
+from src.schemas import (
+    YearlyRadianceSchema,
+    TrendsSchema,
+    SiteYearlySchema,
+    SiteTrendsSchema,
+    validate_schema,
+)
 
 log = get_pipeline_logger(__name__)
 
 
-# ── Validation helpers ────────────────────────────────────────────────────
+# ── NaN tracking helper ──────────────────────────────────────────────────
 
 
-def validate_dataframe(df, required_columns, step_name, min_rows=1):
-    """Validate a DataFrame between pipeline steps.
+def track_nan_counts(df, step_name, prev_nan_counts=None):
+    """Track NaN counts per column and warn on propagation.
 
     Parameters
     ----------
-    df : pd.DataFrame
-        DataFrame to validate.
-    required_columns : list[str]
-        Columns that must be present.
+    df : pd.DataFrame or None
+        DataFrame to inspect.
     step_name : str
-        Name of the step that produced this DataFrame (for error messages).
-    min_rows : int
-        Minimum expected rows.
+        Pipeline step name for logging.
+    prev_nan_counts : dict or None
+        NaN counts from the previous step for delta comparison.
 
     Returns
     -------
-    list[str]
-        List of warning messages (empty if all checks pass).
-
-    Raises
-    ------
-    ValueError
-        If critical validation fails (missing columns).
+    dict
+        Column → NaN count mapping for this step.
     """
-    warnings_list = []
-
     if df is None:
-        raise ValueError(f"[{step_name}] DataFrame is None")
+        return {}
 
-    if len(df) < min_rows:
-        raise ValueError(
-            f"[{step_name}] Expected >= {min_rows} rows, got {len(df)}"
+    nan_counts = df.isna().sum().to_dict()
+    nan_counts = {k: int(v) for k, v in nan_counts.items() if v > 0}
+
+    if nan_counts:
+        log.debug(
+            "[%s] NaN counts: %s",
+            step_name,
+            nan_counts,
+            extra={"step_name": step_name, "nan_summary": nan_counts},
         )
 
-    missing = set(required_columns) - set(df.columns)
-    if missing:
-        raise ValueError(
-            f"[{step_name}] Missing required columns: {missing}"
-        )
+    # Warn if NaN count increased compared to previous step
+    if prev_nan_counts:
+        for col, count in nan_counts.items():
+            prev = prev_nan_counts.get(col, 0)
+            if count > prev:
+                log.warning(
+                    "[%s] NaN count increased for '%s': %d → %d (+%d)",
+                    step_name, col, prev, count, count - prev,
+                )
 
-    # Check for NaN in key columns
-    for col in required_columns:
-        nan_count = df[col].isna().sum()
-        if nan_count > 0:
-            pct = (nan_count / len(df)) * 100
-            warnings_list.append(
-                f"[{step_name}] Column '{col}' has {nan_count} NaN values ({pct:.1f}%)"
-            )
-
-    return warnings_list
+    return nan_counts
 
 
-def validate_yearly_radiance(df, step_name="yearly_radiance"):
-    """Validate the yearly radiance DataFrame."""
-    return validate_dataframe(
-        df,
-        required_columns=["district", "year", "median_radiance", "mean_radiance"],
-        step_name=step_name,
-    )
+# ── Validation helpers (legacy wrappers using Pandera) ───────────────────
 
 
-def validate_trends(df, step_name="trends"):
-    """Validate the trends DataFrame."""
-    return validate_dataframe(
-        df,
-        required_columns=["district", "annual_pct_change", "r_squared"],
-        step_name=step_name,
-    )
+def validate_yearly_radiance(df, step_name="yearly_radiance", strict=False):
+    """Validate the yearly radiance DataFrame using Pandera schema."""
+    return validate_schema(df, YearlyRadianceSchema, step_name, strict=strict)
 
 
-def validate_site_yearly(df, step_name="site_yearly"):
-    """Validate the site yearly DataFrame."""
-    return validate_dataframe(
-        df,
-        required_columns=["name", "year", "median_radiance", "type"],
-        step_name=step_name,
-    )
+def validate_trends(df, step_name="trends", strict=False):
+    """Validate the trends DataFrame using Pandera schema."""
+    return validate_schema(df, TrendsSchema, step_name, strict=strict)
 
 
-def validate_site_trends(df, step_name="site_trends"):
-    """Validate the site trends DataFrame."""
-    return validate_dataframe(
-        df,
-        required_columns=["name", "annual_pct_change", "type"],
-        step_name=step_name,
-    )
+def validate_site_yearly(df, step_name="site_yearly", strict=False):
+    """Validate the site yearly DataFrame using Pandera schema."""
+    return validate_schema(df, SiteYearlySchema, step_name, strict=strict)
+
+
+def validate_site_trends(df, step_name="site_trends", strict=False):
+    """Validate the site trends DataFrame using Pandera schema."""
+    return validate_schema(df, SiteTrendsSchema, step_name, strict=strict)
 
 
 # ── District pipeline runner ─────────────────────────────────────────────
@@ -188,6 +180,8 @@ def run_district_pipeline(args, single_step=None):
     )
     import geopandas as gpd
 
+    strict = getattr(args, "strict_validation", False)
+
     pipeline_result = PipelineRunResult(
         run_dir=args.output_dir,
         entity_type="district",
@@ -220,6 +214,9 @@ def run_district_pipeline(args, single_step=None):
             single_step, args, years, dirs, pipeline_result
         )
 
+    # NaN tracking state
+    prev_nan_counts = {}
+
     # ── Full pipeline ────────────────────────────────────────────────
 
     # Step 1: Load boundaries
@@ -240,15 +237,18 @@ def run_district_pipeline(args, single_step=None):
         pipeline_result.total_time_seconds = time.time() - start_time
         return pipeline_result
 
-    # Validation gate: yearly radiance
+    # Validation gate: yearly radiance (Pandera)
     try:
-        warnings_list = validate_yearly_radiance(yearly_df)
+        warnings_list = validate_yearly_radiance(yearly_df, strict=strict)
         for w in warnings_list:
             log.warning(w)
     except ValueError as e:
         log.error("Validation failed after process_years: %s", e)
         pipeline_result.total_time_seconds = time.time() - start_time
         return pipeline_result
+
+    # NaN tracking after process_years
+    prev_nan_counts = track_nan_counts(yearly_df, "process_years")
 
     # Step 3: Save yearly
     result, yearly_path = step_save_yearly_radiance(yearly_df, csv_dir)
@@ -263,15 +263,18 @@ def run_district_pipeline(args, single_step=None):
         pipeline_result.total_time_seconds = time.time() - start_time
         return pipeline_result
 
-    # Validation gate: trends
+    # Validation gate: trends (Pandera)
     try:
-        warnings_list = validate_trends(trends_df)
+        warnings_list = validate_trends(trends_df, strict=strict)
         for w in warnings_list:
             log.warning(w)
     except ValueError as e:
         log.error("Validation failed after fit_trends: %s", e)
         pipeline_result.total_time_seconds = time.time() - start_time
         return pipeline_result
+
+    # NaN tracking after fit_trends
+    prev_nan_counts = track_nan_counts(trends_df, "fit_trends", prev_nan_counts)
 
     # ── Non-critical steps (log warning, continue on failure) ────────
 
@@ -410,6 +413,22 @@ def run_district_pipeline(args, single_step=None):
                 pipeline_result.step_results.append(result)
 
     pipeline_result.total_time_seconds = time.time() - start_time
+
+    # ── Generate diagnostic report ───────────────────────────────────
+    try:
+        from src.outputs.diagnostic_report import generate_diagnostic_report
+
+        report_path = generate_diagnostic_report(
+            pipeline_result,
+            yearly_df=yearly_df,
+            trends_df=trends_df,
+            output_dir=args.output_dir,
+        )
+        if report_path:
+            log.info("Diagnostic report generated: %s", report_path)
+    except Exception as exc:
+        log.warning("Diagnostic report generation failed: %s", exc)
+
     return pipeline_result
 
 
@@ -556,11 +575,27 @@ def parse_args():
         dest="census_dir",
         help="Override census data directory (default: from config.py)",
     )
+    parser.add_argument(
+        "--strict-validation",
+        action="store_true",
+        default=False,
+        dest="strict_validation",
+        help="Abort pipeline on schema validation failures (default: warn only)",
+    )
+    parser.add_argument(
+        "--compare-run",
+        default=None,
+        dest="compare_run",
+        help="Path to a previous run directory to compare against",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
+    # Generate a fresh run_id for this pipeline invocation
+    run_id = set_run_id()
 
     # Resolve output dir
     base_dir = args.output_dir
@@ -572,7 +607,7 @@ def main():
     # Set up structured logging
     setup_logging(run_dir=args.output_dir)
 
-    log.info("Pipeline runner: %s", args.pipeline)
+    log.info("Pipeline runner: %s (run_id=%s)", args.pipeline, run_id)
     if args.step:
         log.info("Single step mode: %s", args.step)
 

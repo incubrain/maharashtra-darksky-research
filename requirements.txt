@@ -12,11 +12,13 @@ fonttools==4.61.1
 geographiclib==2.1
 geopy==2.4.1
 geopandas==1.1.2
+hypothesis==6.130.1
 idna==3.11
 kiwisolver==1.4.9
 matplotlib==3.10.8
 numpy==2.4.2
 packaging==26.0
+pandera==0.22.1
 pandas==3.0.0
 patsy==1.0.2
 pillow==12.1.0

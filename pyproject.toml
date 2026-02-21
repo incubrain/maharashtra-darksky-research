@@ -1,0 +1,28 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "requires_data: marks tests that need real VIIRS data (deselect with '-m \"not requires_data\"')",
+    "geospatial: marks tests that create raster/vector fixtures",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:pandera.*",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "tests/*",
+    "scripts/*",
+    "src/outputs/download_viirs.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 15
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+]
