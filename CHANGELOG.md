@@ -5,6 +5,26 @@ VIIRS ALAN analysis pipeline.
 
 ## [Unreleased] - 2026-02-21
 
+### Dead Code Removal & Structural Cleanup
+
+- **site_analysis.py** (991 → 814 lines): Removed legacy CLI (`main()`,
+  `parse_args()`, `if __name__` block), dead `generate_annual_frames()` (100
+  lines, never called), redundant `_build_locations()` helper, unused
+  `argparse`/`tempfile`/`viirs_utils` imports.
+- **site_analysis.py**: Split 228-line `generate_site_maps()` into 3 focused
+  helpers: `_plot_state_overlay()`, `_plot_radiance_chart()`,
+  `_plot_radiance_raster()`. Public API unchanged.
+- **pipeline_runner.py** (941 → 920 lines): Removed unused `sys`/`StepTimer`
+  imports, dead `validate_site_yearly()`/`validate_site_trends()` validators.
+  Extracted `parse_years()` helper (was duplicated in 2 places). Extracted
+  `_validate_gate()` helper (was duplicated validation pattern). Replaced
+  8-branch `elif` dispatch chain in `_run_single_district_step()` with a
+  dispatch dict.
+- **Census dataset factory**: New `_census_factory.py` with
+  `make_district_dataset()` and `make_town_dataset()` factory functions.
+  6 thin wrapper modules (census_1991, census_2001, census_2011 + town
+  variants) now use the factory instead of duplicating boilerplate.
+
 ### Step Boilerplate Elimination
 
 - **New:** `src/step_runner.py` with `run_step()` function — a generic step

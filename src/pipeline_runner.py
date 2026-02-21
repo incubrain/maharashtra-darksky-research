@@ -24,24 +24,32 @@ import argparse
 import json
 import logging
 import os
-import sys
 import time
 
 import pandas as pd
 
 from src import config
 from src.config import get_entity_dirs
-from src.logging_config import StepTimer, get_pipeline_logger, setup_logging, set_run_id
+from src.logging_config import get_pipeline_logger, setup_logging, set_run_id
 from src.pipeline_types import PipelineRunResult, StepResult
 from src.schemas import (
     YearlyRadianceSchema,
     TrendsSchema,
-    SiteYearlySchema,
-    SiteTrendsSchema,
     validate_schema,
 )
 
 log = get_pipeline_logger(__name__)
+
+
+# ── Utility helpers ──────────────────────────────────────────────────────
+
+
+def parse_years(years_str):
+    """Parse a year range ('2012-2024') or comma-separated list into a list of ints."""
+    if "-" in years_str:
+        start, end = years_str.split("-")
+        return list(range(int(start), int(end) + 1))
+    return [int(y) for y in years_str.split(",")]
 
 
 # ── NaN tracking helper ──────────────────────────────────────────────────
@@ -94,24 +102,20 @@ def track_nan_counts(df, step_name, prev_nan_counts=None):
 # ── Validation helpers ────────────────────────────────────────────────────
 
 
-def validate_yearly_radiance(df, step_name="yearly_radiance", strict=False):
-    """Validate the yearly radiance DataFrame using Pandera schema."""
-    return validate_schema(df, YearlyRadianceSchema, step_name, strict=strict)
+def _validate_gate(df, schema, label, strict, pipeline_result, start_time):
+    """Run Pandera schema validation; abort pipeline on failure.
 
-
-def validate_trends(df, step_name="trends", strict=False):
-    """Validate the trends DataFrame using Pandera schema."""
-    return validate_schema(df, TrendsSchema, step_name, strict=strict)
-
-
-def validate_site_yearly(df, step_name="site_yearly", strict=False):
-    """Validate the site yearly DataFrame using Pandera schema."""
-    return validate_schema(df, SiteYearlySchema, step_name, strict=strict)
-
-
-def validate_site_trends(df, step_name="site_trends", strict=False):
-    """Validate the site trends DataFrame using Pandera schema."""
-    return validate_schema(df, SiteTrendsSchema, step_name, strict=strict)
+    Returns True if validation passed (pipeline should continue).
+    """
+    try:
+        warnings_list = validate_schema(df, schema, label, strict=strict)
+        for w in warnings_list:
+            log.warning(w)
+        return True
+    except ValueError as e:
+        log.error("Validation failed after %s: %s", label, e)
+        pipeline_result.total_time_seconds = time.time() - start_time
+        return False
 
 
 # ── District pipeline runner ─────────────────────────────────────────────
@@ -193,18 +197,10 @@ def run_district_pipeline(args, single_step=None):
     diagnostics_dir = dirs["diagnostics"]
     reports_dir = dirs["reports"]
 
-    os.makedirs(csv_dir, exist_ok=True)
-    os.makedirs(maps_dir, exist_ok=True)
-    os.makedirs(diagnostics_dir, exist_ok=True)
-    os.makedirs(reports_dir, exist_ok=True)
+    for d in dirs.values():
+        os.makedirs(d, exist_ok=True)
 
-    # Parse years
-    if "-" in args.years:
-        start, end = args.years.split("-")
-        years = list(range(int(start), int(end) + 1))
-    else:
-        years = [int(y) for y in args.years.split(",")]
-
+    years = parse_years(args.years)
     pipeline_result.years_processed = years
 
     # If running a single step, load data from CSVs
@@ -237,13 +233,8 @@ def run_district_pipeline(args, single_step=None):
         return pipeline_result
 
     # Validation gate: yearly radiance (Pandera)
-    try:
-        warnings_list = validate_yearly_radiance(yearly_df, strict=strict)
-        for w in warnings_list:
-            log.warning(w)
-    except ValueError as e:
-        log.error("Validation failed after process_years: %s", e)
-        pipeline_result.total_time_seconds = time.time() - start_time
+    if not _validate_gate(yearly_df, YearlyRadianceSchema, "process_years",
+                          strict, pipeline_result, start_time):
         return pipeline_result
 
     # NaN tracking after process_years
@@ -263,13 +254,8 @@ def run_district_pipeline(args, single_step=None):
         return pipeline_result
 
     # Validation gate: trends (Pandera)
-    try:
-        warnings_list = validate_trends(trends_df, strict=strict)
-        for w in warnings_list:
-            log.warning(w)
-    except ValueError as e:
-        log.error("Validation failed after fit_trends: %s", e)
-        pipeline_result.total_time_seconds = time.time() - start_time
+    if not _validate_gate(trends_df, TrendsSchema, "fit_trends",
+                          strict, pipeline_result, start_time):
         return pipeline_result
 
     # NaN tracking after fit_trends
@@ -466,75 +452,74 @@ def _run_single_district_step(step_name, args, years, dirs, pipeline_result):
     yearly_path = os.path.join(csv_dir, "districts_yearly_radiance.csv")
     trends_path = os.path.join(csv_dir, "districts_trends.csv")
 
-    if step_name == "fit_trends":
+    def _load_yearly():
         if not os.path.exists(yearly_path):
-            log.error("Cannot run fit_trends: %s not found", yearly_path)
-            return pipeline_result
-        yearly_df = pd.read_csv(yearly_path)
-        result, trends_df = step_fit_trends(yearly_df, csv_dir)
-        pipeline_result.step_results.append(result)
+            log.error("Cannot run %s: %s not found", step_name, yearly_path)
+            return None
+        return pd.read_csv(yearly_path)
 
-    elif step_name == "stability":
-        if not os.path.exists(yearly_path):
-            log.error("Cannot run stability: %s not found", yearly_path)
-            return pipeline_result
-        yearly_df = pd.read_csv(yearly_path)
-        result, _ = step_stability_analysis(yearly_df, csv_dir, diagnostics_dir)
-        pipeline_result.step_results.append(result)
-
-    elif step_name == "breakpoints":
-        if not os.path.exists(yearly_path):
-            log.error("Cannot run breakpoints: %s not found", yearly_path)
-            return pipeline_result
-        yearly_df = pd.read_csv(yearly_path)
-        result, _ = step_breakpoint_detection(yearly_df, csv_dir, diagnostics_dir)
-        pipeline_result.step_results.append(result)
-
-    elif step_name == "trend_diagnostics":
-        if not os.path.exists(yearly_path):
-            log.error("Cannot run trend_diagnostics: %s not found", yearly_path)
-            return pipeline_result
-        yearly_df = pd.read_csv(yearly_path)
-        result, _ = step_trend_diagnostics(yearly_df, csv_dir, diagnostics_dir)
-        pipeline_result.step_results.append(result)
-
-    elif step_name == "benchmark":
+    def _load_trends():
         if not os.path.exists(trends_path):
-            log.error("Cannot run benchmark: %s not found", trends_path)
-            return pipeline_result
-        trends_df = pd.read_csv(trends_path)
-        result, _ = step_benchmark_comparison(trends_df, csv_dir)
-        pipeline_result.step_results.append(result)
+            log.error("Cannot run %s: %s not found", step_name, trends_path)
+            return None
+        return pd.read_csv(trends_path)
 
-    elif step_name == "graduated_classification":
-        if not os.path.exists(yearly_path):
-            log.error("Cannot run graduated_classification: %s not found", yearly_path)
-            return pipeline_result
-        yearly_df = pd.read_csv(yearly_path)
-        result, _ = step_graduated_classification(yearly_df, csv_dir, maps_dir)
-        pipeline_result.step_results.append(result)
+    def _load_gdf():
+        return gpd.read_file(args.shapefile_path)
 
-    elif step_name == "animation_frames":
-        gdf = gpd.read_file(args.shapefile_path)
-        result, _ = step_animation_frames(years, args.output_dir, gdf, maps_dir=maps_dir)
-        pipeline_result.step_results.append(result)
+    # Dispatch table: step_name → (loader, step_fn_call)
+    dispatch = {
+        "fit_trends": (
+            _load_yearly,
+            lambda df: step_fit_trends(df, csv_dir),
+        ),
+        "stability": (
+            _load_yearly,
+            lambda df: step_stability_analysis(df, csv_dir, diagnostics_dir),
+        ),
+        "breakpoints": (
+            _load_yearly,
+            lambda df: step_breakpoint_detection(df, csv_dir, diagnostics_dir),
+        ),
+        "trend_diagnostics": (
+            _load_yearly,
+            lambda df: step_trend_diagnostics(df, csv_dir, diagnostics_dir),
+        ),
+        "benchmark": (
+            _load_trends,
+            lambda df: step_benchmark_comparison(df, csv_dir),
+        ),
+        "graduated_classification": (
+            _load_yearly,
+            lambda df: step_graduated_classification(df, csv_dir, maps_dir),
+        ),
+        "animation_frames": (
+            _load_gdf,
+            lambda gdf: step_animation_frames(years, args.output_dir, gdf, maps_dir=maps_dir),
+        ),
+        "per_district_radiance_maps": (
+            _load_gdf,
+            lambda gdf: step_per_district_radiance_maps(
+                args.output_dir, max(years), gdf, maps_dir=maps_dir,
+            ),
+        ),
+    }
 
-    elif step_name == "per_district_radiance_maps":
-        gdf = gpd.read_file(args.shapefile_path)
-        result, _ = step_per_district_radiance_maps(
-            args.output_dir, max(years), gdf, maps_dir=maps_dir,
-        )
-        pipeline_result.step_results.append(result)
-
-    else:
+    if step_name not in dispatch:
         log.error(
             "Step '%s' not supported for single-step execution. "
-            "Available: fit_trends, stability, breakpoints, trend_diagnostics, "
-            "benchmark, graduated_classification, animation_frames, "
-            "per_district_radiance_maps",
-            step_name,
+            "Available: %s",
+            step_name, ", ".join(sorted(dispatch)),
         )
+        return pipeline_result
 
+    loader, step_fn = dispatch[step_name]
+    data = loader()
+    if data is None:
+        return pipeline_result
+
+    result, _ = step_fn(data)
+    pipeline_result.step_results.append(result)
     return pipeline_result
 
 
@@ -828,13 +813,7 @@ def run_entity_pipeline(args, entity_type):
     )
     start_time = time.time()
 
-    # Parse years
-    if "-" in args.years:
-        start, end = args.years.split("-")
-        years = list(range(int(start), int(end) + 1))
-    else:
-        years = [int(y) for y in args.years.split(",")]
-
+    years = parse_years(args.years)
     pipeline_result.years_processed = years
 
     city_source = getattr(args, "city_source", "config")

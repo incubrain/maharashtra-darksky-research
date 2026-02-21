@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Site-level ALAN analysis for 5 cities and 11 dark-sky candidate sites.
 
@@ -6,15 +5,11 @@ Uses Maharashtra VIIRS subsets (already produced by viirs_process.py)
 to compute radiance metrics at sub-district resolution via 10 km buffers
 around point coordinates, then fits log-linear trends over the year range.
 
-Usage (run from project root):
-    python3 -m src.site.site_analysis [--output-dir ./outputs] [--buffer-km 10]
-                                      [--cf-threshold 5] [--years 2012-2024]
+Entry point: ``python3 -m src.pipeline_runner``
 """
 
-import argparse
 from src.logging_config import get_pipeline_logger
 import os
-import tempfile
 
 import geopandas as gpd
 import matplotlib
@@ -28,7 +23,6 @@ from rasterstats import zonal_stats
 from shapely.geometry import Point
 
 from src import config
-from src import viirs_utils
 from src.formulas.trend import fit_log_linear_trend as _core_fit_trend
 from src.formulas.classification import classify_alan, classify_alan_series
 
@@ -41,16 +35,6 @@ MANY_THRESHOLD = 50
 
 # ALAN classification colors for point markers
 ALAN_COLORS = {"high": "#d62728", "medium": "#ff7f0e", "low": "#2ca02c"}
-
-
-def _build_locations():
-    """Build LOCATIONS dict from config.URBAN_CITIES and config.DARKSKY_SITES."""
-    locations = {}
-    for name, info in config.URBAN_CITIES.items():
-        locations[name] = (info["lat"], info["lon"], "city", info["district"])
-    for name, info in config.DARKSKY_SITES.items():
-        locations[name] = (info["lat"], info["lon"], "site", info["district"])
-    return locations
 
 
 def _build_locations_filtered(entity_type="all", city_source="config"):
@@ -81,7 +65,7 @@ def _build_locations_filtered(entity_type="all", city_source="config"):
     return locations
 
 
-LOCATIONS = _build_locations()
+LOCATIONS = _build_locations_filtered()
 
 
 def build_site_geodataframe(buffer_km=None, entity_type="all", city_source="config"):
@@ -253,11 +237,10 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
                        year=2024):
     """Generate maps overlaying analysis locations on Maharashtra with radiance data.
 
-    Renders maps appropriate for the entity type present in the data
-    (cities or dark-sky sites — each processed independently).
-
-    For cities: the state-level map shows only the top 20 by radiance
-    for legibility, and per-district maps show all cities in each district.
+    Delegates to three focused helpers:
+    - _plot_state_overlay: state map with location markers/buffers
+    - _plot_radiance_chart: bar chart or 3-panel distribution
+    - _plot_radiance_raster: raster heatmap with site overlay
     """
     maps_dir = os.path.join(output_dir, "maps")
     os.makedirs(maps_dir, exist_ok=True)
@@ -265,29 +248,41 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     merged = gdf_sites.merge(metrics_df[["name", "median_radiance", "alan_class"]],
                              on="name")
 
-    # Determine entity type for labelling
+    # Shared entity-type styling
     entity_types = merged["type"].unique()
     is_city = "city" in entity_types
-    entity_label = "Cities" if is_city else "Dark-Sky Sites"
-    entity_color = "crimson" if is_city else "forestgreen"
-    entity_edge = "darkred" if is_city else "darkgreen"
-    outline_color = "cyan" if is_city else "lime"
+    style = {
+        "label": "Cities" if is_city else "Dark-Sky Sites",
+        "color": "crimson" if is_city else "forestgreen",
+        "edge": "darkred" if is_city else "darkgreen",
+        "outline": "cyan" if is_city else "lime",
+        "many": len(merged) > MANY_THRESHOLD,
+    }
 
-    # For city state map: limit to top 20 by radiance for legibility
     if is_city and len(merged) > 20:
         top20 = merged.nlargest(20, "median_radiance")
-        state_label = f"Top 20 {entity_label} by Radiance"
+        state_label = f"Top 20 {style['label']} by Radiance"
     else:
         top20 = merged
-        state_label = entity_label
+        state_label = style["label"]
 
-    # ── Map 1: State overlay ────────────────────────────────────────
-    many = len(merged) > MANY_THRESHOLD
+    _plot_state_overlay(merged, top20, district_gdf, maps_dir, year, style, state_label)
+    _plot_radiance_chart(metrics_df, maps_dir, year, style)
+    _plot_radiance_raster(
+        top20, district_gdf, subset_dir, maps_dir, year, style, state_label,
+    )
+
+    if is_city and "district" in merged.columns:
+        _generate_per_district_maps(merged, district_gdf, maps_dir, year)
+
+
+def _plot_state_overlay(merged, top20, district_gdf, maps_dir, year, style, state_label):
+    """State-level overlay: districts + location markers/buffers."""
+    many = style["many"]
     fig, ax = plt.subplots(figsize=(14, 11))
     district_gdf.plot(ax=ax, color="whitesmoke", edgecolor="grey", linewidth=0.5)
 
     if many:
-        # Scatter dots colored by radiance for many-town case
         cx = merged.geometry.centroid.x
         cy = merged.geometry.centroid.y
         rad = merged["median_radiance"].fillna(0).values
@@ -295,47 +290,31 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
                         edgecolors="black", linewidths=0.3, alpha=0.8, zorder=5,
                         vmin=0, vmax=max(rad.max(), 1))
         plt.colorbar(sc, ax=ax, shrink=0.5, label="Median Radiance (nW/cm²/sr)")
-
-        # Label top 10 by radiance
         label_set = merged.nlargest(10, "median_radiance")
-        texts = []
-        for _, row in label_set.iterrows():
-            c = row.geometry.centroid
-            txt = ax.text(c.x, c.y, f"{row['name']}\n{row['median_radiance']:.1f}",
-                          fontsize=5.5, fontweight="bold", ha="center", va="center",
-                          bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="grey",
-                                    alpha=0.85, linewidth=0.4))
-            texts.append(txt)
-        try:
-            from adjustText import adjust_text
-            adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", color="grey", lw=0.4),
-                        expand=(1.3, 1.5), force_text=(0.5, 0.8))
-        except ImportError:
-            pass
-        state_label = f"{len(merged)} {entity_label}"
+        state_label = f"{len(merged)} {style['label']}"
     else:
-        # Original buffer overlay for small counts
-        top20.plot(ax=ax, color=entity_color, alpha=0.4, edgecolor=entity_edge,
+        top20.plot(ax=ax, color=style["color"], alpha=0.4, edgecolor=style["edge"],
                    linewidth=1.2)
-        texts = []
-        for _, row in top20.iterrows():
-            centroid = row.geometry.centroid
-            txt = ax.text(
-                centroid.x, centroid.y,
-                f"{row['name']}\n{row['median_radiance']:.1f}",
-                fontsize=5.5, fontweight="bold", ha="center", va="center",
-                bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="grey",
-                          alpha=0.85, linewidth=0.4),
-            )
-            texts.append(txt)
-        try:
-            from adjustText import adjust_text
-            adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", color="grey", lw=0.4),
-                        expand=(1.3, 1.5), force_text=(0.5, 0.8))
-        except ImportError:
-            pass
+        label_set = top20
+
+    texts = []
+    for _, row in label_set.iterrows():
+        c = row.geometry.centroid
+        txt = ax.text(c.x, c.y, f"{row['name']}\n{row['median_radiance']:.1f}",
+                      fontsize=5.5, fontweight="bold", ha="center", va="center",
+                      bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="grey",
+                                alpha=0.85, linewidth=0.4))
+        texts.append(txt)
+    try:
+        from adjustText import adjust_text
+        adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", color="grey", lw=0.4),
+                    expand=(1.3, 1.5), force_text=(0.5, 0.8))
+    except ImportError:
+        pass
+
+    if not many:
         ax.legend(
-            handles=[mpatches.Patch(color=entity_color, alpha=0.4,
+            handles=[mpatches.Patch(color=style["color"], alpha=0.4,
                                     label=f"{state_label} (10 km buffer)")],
             loc="lower left", fontsize=9,
         )
@@ -348,15 +327,18 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     plt.close(fig)
     log.info("Saved: %s", path)
 
-    # ── Map 2: Radiance chart ──────────────────────────────────────
+
+def _plot_radiance_chart(metrics_df, maps_dir, year, style):
+    """Radiance comparison: bar chart (few locations) or 3-panel distribution (many)."""
+    entity_label = style["label"]
+    entity_color = style["color"]
     df_sorted = metrics_df.sort_values("median_radiance", ascending=True)
 
     if len(df_sorted) > MANY_THRESHOLD:
-        # 3-panel distribution figure for many towns
         fig, axes = plt.subplots(1, 3, figsize=(18, 8),
                                  gridspec_kw={"width_ratios": [2, 2, 1]})
 
-        # Panel 1: Histogram of radiance (log-x scale)
+        # Panel 1: Histogram
         ax1 = axes[0]
         rad_vals = df_sorted["median_radiance"].dropna()
         rad_vals = rad_vals[rad_vals > 0]
@@ -373,12 +355,11 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
         ax1.legend(fontsize=8)
         ax1.grid(axis="y", alpha=0.3)
 
-        # Panel 2: Box plot by district (top 15 districts by town count)
+        # Panel 2: Box plot by district
         ax2 = axes[1]
         district_counts = df_sorted["district"].value_counts()
         top_districts = district_counts.head(15).index.tolist()
         subset = df_sorted[df_sorted["district"].isin(top_districts)]
-        # Order districts by median radiance
         district_order = (subset.groupby("district")["median_radiance"]
                           .median().sort_values().index.tolist())
         box_data = [subset[subset["district"] == d]["median_radiance"].dropna().values
@@ -416,7 +397,6 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
                      fontsize=14, fontweight="bold")
         plt.tight_layout()
     else:
-        # Original horizontal bar chart for small counts
         fig, ax = plt.subplots(figsize=(12, max(8, len(df_sorted) * 0.3)))
         bars = ax.barh(df_sorted["name"], df_sorted["median_radiance"],
                        color=entity_color, edgecolor="grey", linewidth=0.5)
@@ -436,7 +416,10 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     plt.close(fig)
     log.info("Saved: %s", path)
 
-    # ── Map 3: Radiance raster with overlay (top 20 for cities) ───────
+
+def _plot_radiance_raster(top20, district_gdf, subset_dir, maps_dir, year,
+                          style, state_label):
+    """Radiance raster heatmap with site/city overlay."""
     median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
     with rasterio.open(median_path) as src:
         raster = src.read(1)
@@ -449,14 +432,13 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
                    origin="upper", aspect="auto")
     district_gdf.boundary.plot(ax=ax, edgecolor="white", linewidth=0.3, alpha=0.5)
 
-    if many:
-        # Small scatter dots on raster for many-town case
+    if style["many"]:
         cx = top20.geometry.centroid.x
         cy = top20.geometry.centroid.y
         ax.scatter(cx, cy, s=15, c="cyan", edgecolors="white",
                    linewidths=0.3, alpha=0.9, zorder=5)
     else:
-        top20.plot(ax=ax, facecolor="none", edgecolor=outline_color, linewidth=1.5)
+        top20.plot(ax=ax, facecolor="none", edgecolor=style["outline"], linewidth=1.5)
 
     for _, row in top20.iterrows():
         c = row.geometry.centroid
@@ -472,10 +454,6 @@ def generate_site_maps(gdf_sites, metrics_df, district_gdf, subset_dir, output_d
     fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
-
-    # ── Per-district maps (cities only) ───────────────────────────────
-    if is_city and "district" in merged.columns:
-        _generate_per_district_maps(merged, district_gdf, maps_dir, year)
 
 
 def _generate_per_district_maps(merged, district_gdf, maps_dir, year):
@@ -724,157 +702,6 @@ def generate_site_timeseries(yearly_df, output_dir):
     log.info("Saved: %s", path)
 
 
-def generate_annual_frames(years, output_dir, gdf_sites, district_gdf):
-    """Generate annual map frames for animation with YoY statistics."""
-    frame_dir = os.path.join(output_dir, "maps", "frames")
-    os.makedirs(frame_dir, exist_ok=True)
-    log.info("Generating annual frames in %s...", frame_dir)
-
-    # Pre-calculate state statistics
-    state_stats = {}
-    for year in years:
-        subset_dir = os.path.join(output_dir, "subsets", str(year))
-        median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
-        
-        if not os.path.exists(median_path):
-            log.warning("Missing raster for %d, skipping frame", year)
-            continue
-            
-        with rasterio.open(median_path) as src:
-            data = src.read(1)
-            # Apply DBS
-            data_corrected = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
-            
-            # Valid mask for statistics (finite and >0)
-            valid_mask = np.isfinite(data_corrected) & (data_corrected > 0)
-            if valid_mask.sum() > 0:
-                # Re-calculate stats on corrected data
-                median_val = np.median(data_corrected[valid_mask])
-                state_stats[year] = median_val
-            else:
-                state_stats[year] = np.nan
-
-    baseline_year = min(years)
-    baseline_val = state_stats.get(baseline_year, np.nan)
-    
-    cities = gdf_sites[gdf_sites["type"] == "city"]
-    sites = gdf_sites[gdf_sites["type"] == "site"]
-
-    # Generate frame for each year
-    for i, year in enumerate(years):
-        if year not in state_stats:
-            continue
-            
-        current_val = state_stats[year]
-        prev_year = years[i-1] if i > 0 else None
-        prev_val = state_stats.get(prev_year, np.nan)
-        
-        # Calculate changes
-        growth_vs_base = ((current_val - baseline_val) / baseline_val * 100) if baseline_val else np.nan
-        yoy_change = ((current_val - prev_val) / prev_val * 100) if prev_val else np.nan
-        
-        # Load raster for plotting
-        subset_dir = os.path.join(output_dir, "subsets", str(year))
-        median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
-        
-        with rasterio.open(median_path) as src:
-            raster = src.read(1)
-            extent = [src.bounds.left, src.bounds.right, src.bounds.bottom, src.bounds.top]
-            
-        # Apply Dynamic Background Subtraction for display
-        valid_mask = np.isfinite(raster) & (raster > 0)
-        if valid_mask.sum() > 0:
-            p01 = np.percentile(raster[valid_mask], 1)
-            raster = np.maximum(0, raster - p01)
-            
-        # Plot
-        fig, ax = plt.subplots(figsize=(14, 11))
-        
-        # Log-scale radiance
-        raster_log = np.log10(np.clip(raster, 0.01, None))
-        raster_log = np.where(np.isfinite(raster_log), raster_log, np.nan)
-        
-        im = ax.imshow(raster_log, extent=extent, cmap="magma", vmin=-2, vmax=2,
-                       origin="upper", aspect="auto")
-                       
-        district_gdf.boundary.plot(ax=ax, edgecolor="white", linewidth=0.3, alpha=0.5)
-        # sites/cities plotting removed for cleaner map
-        
-        # Annotations
-        stats_text = (
-            f"Year: {year}\n"
-            f"State Median Radiance: {current_val:.2f} nW/cm²/sr\n"
-            f"Growth vs {baseline_year}: {growth_vs_base:+.1f}%\n"
-            f"(YoY: {yoy_change:+.1f}%)" if prev_year else f"Year: {year}\nState Median Radiance: {current_val:.2f} nW/cm²/sr\n(Baseline)"
-        )
-        
-        # Add text box in bottom-right
-        ax.text(0.98, 0.02, stats_text, transform=ax.transAxes,
-                fontsize=14, fontweight="bold", color="white",
-                ha="right", va="bottom",
-                bbox=dict(boxstyle="round,pad=0.5", fc="black", alpha=0.7, ec="white"))
-
-        cbar = plt.colorbar(im, ax=ax, shrink=0.6, label="log₁₀(Radiance nW/cm²/sr)")
-        ax.set_title(f"Maharashtra ALAN Evolution ({year})", fontsize=16)
-        ax.set_axis_off()
-        
-        plt.tight_layout()
-        path = os.path.join(frame_dir, f"frame_{year}.png")
-        fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight", facecolor='black')
-        plt.close(fig)
-        log.info("Generated frame: %s", path)
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Site-level ALAN analysis (5 cities + 11 dark-sky sites)"
-    )
-    parser.add_argument("--output-dir", default=config.DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--shapefile-path",
-                        default=config.DEFAULT_SHAPEFILE_PATH)
-    parser.add_argument("--buffer-km", type=float, default=config.SITE_BUFFER_RADIUS_KM)
-    parser.add_argument("--cf-threshold", type=int, default=config.CF_COVERAGE_THRESHOLD)
-    parser.add_argument("--years", default="2012-2024",
-                        help="Year range (e.g., '2012-2024') or single year")
-    parser.add_argument("--type", choices=["city", "site", "all"], default="all",
-                        help="Entity type to analyze: city, site, or all (default: all)")
-    parser.add_argument("--city-source", choices=["config", "census"], default="config",
-                        help="City locations source: 'config' (43 hand-picked) or 'census' (geocoded census towns)")
-    args = parser.parse_args()
-
-    # If using default output dir and 'latest' symlink exists, use that
-    # This ensures we pick up the subsets from the most recent run
-    if args.output_dir == config.DEFAULT_OUTPUT_DIR:
-        latest_dir = os.path.join(args.output_dir, "latest")
-        if os.path.isdir(latest_dir):
-            args.output_dir = latest_dir
-            log.info("Using latest run directory: %s", args.output_dir)
-
-    # Parse year range
-    if "-" in args.years:
-        start, end = args.years.split("-")
-        years = list(range(int(start), int(end) + 1))
-    else:
-        years = [int(y) for y in args.years.split(",")]
-
-    log.info("Site-level ALAN analysis (%s)", args.years)
-    log.info("Buffer radius: %d km | CF threshold: %d | Type: %s | City source: %s",
-             args.buffer_km, args.cf_threshold, args.type, args.city_source)
-
-    # Validate district names
-    from src.validate_names import validate_or_exit
-    validate_or_exit(args.shapefile_path, check_config=True)
-
-    # Determine which entity types to process
-    entity_types = [args.type] if args.type != "all" else ["city", "site"]
-
-    for entity_type in entity_types:
-        log.info("Running %s analysis...", entity_type)
-        _run_entity_pipeline(args, years, entity_type, city_source=args.city_source)
-
-    log.info("\nDone! Outputs in %s/", args.output_dir)
-
-
 def _run_entity_pipeline(args, years, entity_type, city_source="config"):
     """Run the site/city analysis pipeline for a specific entity type.
 
@@ -985,7 +812,3 @@ def _run_entity_pipeline(args, years, entity_type, city_source="config"):
         log.warning("Report generation failed: %s", result.error)
 
     return steps
-
-
-if __name__ == "__main__":
-    main()
