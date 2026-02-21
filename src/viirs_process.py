@@ -270,32 +270,20 @@ def compute_district_stats(filtered_array, transform, gdf):
     saturation. (Elvidge et al. 2021, Section 3.1)
     all_touched=True ensures boundary pixels are included, following standard
     practice for administrative boundary zonal statistics.
+
+    Note: Uses the numpy array + affine approach for zonal_stats instead of
+    MemoryFile to avoid GDAL environment corruption after large raster
+    operations (unpack/subset of ~11 GB global composites). The MemoryFile
+    approach silently returns None for all stats when GDAL's internal state
+    is corrupted by prior rasterio.mask.mask() calls on large files.
     """
-    from rasterio.io import MemoryFile
-
-    meta = {
-        "driver": "GTiff",
-        "height": filtered_array.shape[0],
-        "width": filtered_array.shape[1],
-        "count": 1,
-        "dtype": "float32",
-        "crs": "EPSG:4326",
-        "transform": transform,
-        "nodata": np.nan,
-    }
-
-    # Use in-memory raster to avoid temp file side effects
-    with MemoryFile() as memfile:
-        with memfile.open(**meta) as dst:
-            dst.write(filtered_array.astype("float32"), 1)
-
-        with memfile.open() as src:
-            results = zonal_stats(
-                gdf, src.name,
-                stats=["mean", "median", "count", "min", "max", "std"],
-                nodata=np.nan,
-                all_touched=True,
-            )
+    results = zonal_stats(
+        gdf, filtered_array.astype("float32"),
+        stats=["mean", "median", "count", "min", "max", "std"],
+        nodata=np.nan,
+        all_touched=True,
+        affine=transform,
+    )
 
     df = pd.DataFrame(results)
     df["district"] = gdf["district"].values

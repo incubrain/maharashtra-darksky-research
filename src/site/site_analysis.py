@@ -205,40 +205,23 @@ def compute_site_metrics(gdf, subset_dir, year=2024, cf_threshold=None):
     log.info("Quality filter: %d pixels pass (lit_mask & cf_cvg >= %d)",
              total_valid, cf_threshold)
 
-    # Use in-memory raster to avoid temp file side effects
-    from rasterio.io import MemoryFile
+    # Use numpy array + affine approach for zonal_stats to avoid GDAL
+    # environment corruption after large raster operations (unpack/subset
+    # of ~11 GB global composites). See compute_district_stats() note.
+    results_filt = zonal_stats(
+        gdf, filtered.astype("float32"),
+        stats=["mean", "median", "count", "min", "max", "std"],
+        nodata=np.nan, all_touched=True,
+        affine=transform,
+    )
 
-    meta = {
-        "driver": "GTiff", "height": filtered.shape[0], "width": filtered.shape[1],
-        "count": 1, "dtype": "float32", "crs": crs, "transform": transform,
-        "nodata": np.nan,
-    }
-
-    # Create filtered raster in memory
-    with MemoryFile() as memfile_filt:
-        with memfile_filt.open(**meta) as dst:
-            dst.write(filtered, 1)
-
-        # Create unfiltered raster in memory for pixel count comparison
-        with MemoryFile() as memfile_unfilt:
-            unfilt = np.where(np.isfinite(median_data), median_data, np.nan)
-            with memfile_unfilt.open(**meta) as dst:
-                dst.write(unfilt, 1)
-
-            # Compute zonal stats on both
-            with memfile_filt.open() as src_filt:
-                results_filt = zonal_stats(
-                    gdf, src_filt.name,
-                    stats=["mean", "median", "count", "min", "max", "std"],
-                    nodata=np.nan, all_touched=True,
-                )
-
-            with memfile_unfilt.open() as src_unfilt:
-                results_unfilt = zonal_stats(
-                    gdf, src_unfilt.name,
-                    stats=["count"],
-                    nodata=np.nan, all_touched=True,
-                )
+    unfilt = np.where(np.isfinite(median_data), median_data, np.nan)
+    results_unfilt = zonal_stats(
+        gdf, unfilt.astype("float32"),
+        stats=["count"],
+        nodata=np.nan, all_touched=True,
+        affine=transform,
+    )
 
     df = pd.DataFrame(results_filt)
     df["name"] = gdf["name"].values
