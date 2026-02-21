@@ -876,7 +876,13 @@ def main():
 
 
 def _run_entity_pipeline(args, years, entity_type, city_source="config"):
-    """Run the site/city analysis pipeline for a specific entity type."""
+    """Run the site/city analysis pipeline for a specific entity type.
+
+    Returns
+    -------
+    list[StepResult]
+        All step results from the pipeline.
+    """
     # Import step functions
     from src.site.site_pipeline_steps import (
         step_build_site_buffers,
@@ -977,6 +983,8 @@ def _run_entity_pipeline(args, years, entity_type, city_source="config"):
     steps.append(result)
     if not result.ok:
         log.warning("Report generation failed: %s", result.error)
+
+    return steps
 
 
 if __name__ == "__main__":

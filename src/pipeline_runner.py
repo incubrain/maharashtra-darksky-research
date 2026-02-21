@@ -138,6 +138,8 @@ DISTRICT_STEPS = [
     "statewide_viz",
     "graduated_classification",
     "district_reports",
+    "animation_frames",
+    "per_district_radiance_maps",
     # Cross-dataset steps (gated by --datasets)
     "load_datasets",
     "merge_datasets",
@@ -177,6 +179,8 @@ def run_district_pipeline(args, single_step=None):
         step_statewide_visualizations,
         step_graduated_classification,
         step_district_reports,
+        step_animation_frames,
+        step_per_district_radiance_maps,
     )
     import geopandas as gpd
 
@@ -358,6 +362,20 @@ def run_district_pipeline(args, single_step=None):
     if not result.ok:
         log.warning("District reports failed: %s", result.error)
 
+    # Step 16: Animation frames (sprawl, differential, darkness, trend map)
+    result, _ = step_animation_frames(years, args.output_dir, gdf, maps_dir=maps_dir)
+    pipeline_result.step_results.append(result)
+    if not result.ok:
+        log.warning("Animation frames failed: %s", result.error)
+
+    # Step 17: Per-district radiance maps
+    result, _ = step_per_district_radiance_maps(
+        args.output_dir, max(years), gdf, maps_dir=maps_dir,
+    )
+    pipeline_result.step_results.append(result)
+    if not result.ok:
+        log.warning("Per-district radiance maps failed: %s", result.error)
+
     # ── Cross-dataset steps (only if datasets enabled) ────────────
     from src.dataset_aggregator import get_enabled_datasets, get_dataset_suffix
 
@@ -441,6 +459,8 @@ def _run_single_district_step(step_name, args, years, dirs, pipeline_result):
         step_trend_diagnostics,
         step_benchmark_comparison,
         step_graduated_classification,
+        step_animation_frames,
+        step_per_district_radiance_maps,
     )
     import geopandas as gpd
 
@@ -499,11 +519,24 @@ def _run_single_district_step(step_name, args, years, dirs, pipeline_result):
         result, _ = step_graduated_classification(yearly_df, csv_dir, maps_dir)
         pipeline_result.step_results.append(result)
 
+    elif step_name == "animation_frames":
+        gdf = gpd.read_file(args.shapefile_path)
+        result, _ = step_animation_frames(years, args.output_dir, gdf, maps_dir=maps_dir)
+        pipeline_result.step_results.append(result)
+
+    elif step_name == "per_district_radiance_maps":
+        gdf = gpd.read_file(args.shapefile_path)
+        result, _ = step_per_district_radiance_maps(
+            args.output_dir, max(years), gdf, maps_dir=maps_dir,
+        )
+        pipeline_result.step_results.append(result)
+
     else:
         log.error(
             "Step '%s' not supported for single-step execution. "
             "Available: fit_trends, stability, breakpoints, trend_diagnostics, "
-            "benchmark, graduated_classification",
+            "benchmark, graduated_classification, animation_frames, "
+            "per_district_radiance_maps",
             step_name,
         )
 
@@ -588,7 +621,80 @@ def parse_args():
         dest="compare_run",
         help="Path to a previous run directory to compare against",
     )
+    parser.add_argument(
+        "--buffer-km",
+        type=float,
+        default=config.SITE_BUFFER_RADIUS_KM,
+        dest="buffer_km",
+        help="Buffer radius in km for site/city analysis (default: from config)",
+    )
+    parser.add_argument(
+        "--city-source",
+        choices=["config", "census"],
+        default="config",
+        dest="city_source",
+        help="City locations source: 'config' (hand-picked) or 'census' (geocoded census towns)",
+    )
     return parser.parse_args()
+
+
+# ── City / Site pipeline runner ──────────────────────────────────────────
+
+
+def run_entity_pipeline(args, entity_type):
+    """Run city or site pipeline and return PipelineRunResult.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed CLI arguments (must include output_dir, buffer_km,
+        cf_threshold, shapefile_path, years).
+    entity_type : str
+        "city" or "site".
+
+    Returns
+    -------
+    PipelineRunResult
+    """
+    import traceback
+    from src.site.site_analysis import _run_entity_pipeline
+
+    pipeline_result = PipelineRunResult(
+        run_dir=args.output_dir,
+        entity_type=entity_type,
+    )
+    start_time = time.time()
+
+    # Parse years
+    if "-" in args.years:
+        start, end = args.years.split("-")
+        years = list(range(int(start), int(end) + 1))
+    else:
+        years = [int(y) for y in args.years.split(",")]
+
+    pipeline_result.years_processed = years
+
+    city_source = getattr(args, "city_source", "config")
+
+    try:
+        steps = _run_entity_pipeline(args, years, entity_type, city_source=city_source)
+        if steps:
+            pipeline_result.step_results.extend(steps)
+    except Exception as exc:
+        pipeline_result.step_results.append(
+            StepResult(
+                step_name=f"{entity_type}_pipeline",
+                status="error",
+                error=traceback.format_exc(),
+            )
+        )
+        log.error("%s pipeline failed: %s", entity_type, exc)
+
+    pipeline_result.total_time_seconds = time.time() - start_time
+    return pipeline_result
+
+
+# ── Main entry point ─────────────────────────────────────────────────────
 
 
 def main():
@@ -623,23 +729,7 @@ def main():
         if pipeline_type == "district":
             result = run_district_pipeline(args, single_step=args.step)
         elif pipeline_type in ("city", "site"):
-            # Delegate to site_analysis with --type flag
-            log.info(
-                "Use: python3 -m src.site_analysis --type %s", pipeline_type
-            )
-            result = PipelineRunResult(
-                run_dir=args.output_dir,
-                entity_type=pipeline_type,
-            )
-            result.step_results.append(
-                StepResult(
-                    step_name="delegate",
-                    status="skipped",
-                    output_summary={
-                        "message": f"Use python3 -m src.site_analysis --type {pipeline_type}"
-                    },
-                )
-            )
+            result = run_entity_pipeline(args, pipeline_type)
 
         # Save provenance
         save_pipeline_result(result, args.output_dir)

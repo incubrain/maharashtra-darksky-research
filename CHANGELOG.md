@@ -5,6 +5,36 @@ VIIRS ALAN analysis pipeline.
 
 ## [Unreleased] - 2026-02-21
 
+### Visualization Pipeline Integration
+
+#### Animation Frames Integrated into District Pipeline
+- **New step:** `animation_frames` generates sprawl, differential, and darkness
+  frame sequences (one PNG per year) plus a pixel-wise trend map — all previously
+  implemented in `src/outputs/visualizations.py` but never called from any pipeline.
+- Frames output to `district/maps/frames/{sprawl,differential,darkness}/` for easy
+  GIF creation with ImageMagick or ffmpeg.
+- `alan_trend_map.png` shows per-pixel linear regression slope (coolwarm colormap).
+
+#### Per-District Radiance Maps
+- **New step:** `per_district_radiance_maps` generates a zoomed-in raster radiance
+  map for each of the 36 districts, clipped to district boundaries.
+- Uses log-scale magma colormap with district boundary overlay.
+- Output to `district/maps/districts/<name>_radiance.png`.
+
+#### City/Site Pipelines Integrated into Main Runner
+- `--pipeline all` now actually runs city and site pipelines (previously just
+  logged a delegation message and skipped execution).
+- Added `--buffer-km` and `--city-source` CLI flags to the main pipeline runner.
+- `_run_entity_pipeline()` now returns step results for proper provenance tracking.
+
+#### Standalone Map Regeneration Expanded
+- `python3 -m src.outputs.generate_maps --type district` now regenerates animation
+  frames and per-district radiance maps in addition to existing visualizations.
+
+#### Documentation
+- Created `PIPELINE_GUIDE.md`: comprehensive reference for all pipelines, steps,
+  outputs, visualization catalog, CLI flags, and source code map.
+
 ### Critical Bug Fixes
 
 #### Silent Data Loss from GDAL MemoryFile Corruption

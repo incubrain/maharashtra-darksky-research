@@ -870,3 +870,148 @@ def step_district_reports(
         output_summary={},
         timing_seconds=timer.elapsed,
     ), None
+
+
+def step_animation_frames(
+    years: list[int],
+    output_dir: str,
+    gdf: gpd.GeoDataFrame,
+    maps_dir: str = None,
+) -> tuple[StepResult, dict | None]:
+    """Generate animation frames (sprawl, differential, darkness) and trend map.
+
+    Parameters
+    ----------
+    years : list[int]
+        Years to generate frames for.
+    output_dir : str
+        Run-level output directory (contains subsets/).
+    gdf : gpd.GeoDataFrame
+        District boundaries.
+    maps_dir : str, optional
+        Entity-level maps directory. If None, uses output_dir/maps/.
+    """
+    from src.outputs.visualizations import (
+        generate_sprawl_frames,
+        generate_differential_frames,
+        generate_darkness_frames,
+        generate_trend_map,
+    )
+
+    frame_counts = None
+    error_tb = None
+
+    with StepTimer() as timer:
+        try:
+            frame_counts = {}
+
+            generate_sprawl_frames(
+                years, output_dir, gdf, maps_output_dir=maps_dir,
+            )
+            frame_counts["sprawl"] = len(years)
+
+            generate_differential_frames(
+                years, output_dir, gdf, maps_output_dir=maps_dir,
+            )
+            frame_counts["differential"] = len(years)
+
+            generate_darkness_frames(
+                years, output_dir, gdf, maps_output_dir=maps_dir,
+            )
+            frame_counts["darkness"] = len(years)
+
+            generate_trend_map(
+                years, output_dir, gdf, maps_output_dir=maps_dir,
+            )
+            frame_counts["trend_map"] = 1
+
+        except (FileNotFoundError, ValueError, KeyError) as exc:
+            error_tb = traceback.format_exc()
+            log.error("animation_frames failed: %s", exc, exc_info=True)
+        except Exception:
+            error_tb = traceback.format_exc()
+            log.error("animation_frames failed unexpectedly", exc_info=True)
+
+    if error_tb:
+        log_step_summary(log, "animation_frames", "error", timing_seconds=timer.elapsed)
+        return StepResult(
+            step_name="animation_frames",
+            status="error",
+            error=error_tb,
+            timing_seconds=timer.elapsed,
+        ), None
+
+    log_step_summary(
+        log, "animation_frames", "success",
+        input_summary={"years": len(years)},
+        output_summary=frame_counts,
+        timing_seconds=timer.elapsed,
+    )
+    return StepResult(
+        step_name="animation_frames",
+        status="success",
+        input_summary={"years": len(years)},
+        output_summary=frame_counts,
+        timing_seconds=timer.elapsed,
+    ), frame_counts
+
+
+def step_per_district_radiance_maps(
+    output_dir: str,
+    latest_year: int,
+    gdf: gpd.GeoDataFrame,
+    maps_dir: str = None,
+) -> tuple[StepResult, int | None]:
+    """Generate per-district zoomed radiance raster maps.
+
+    Parameters
+    ----------
+    output_dir : str
+        Run-level output directory (contains subsets/).
+    latest_year : int
+        Year to render.
+    gdf : gpd.GeoDataFrame
+        District boundaries.
+    maps_dir : str, optional
+        Entity-level maps directory. If None, uses output_dir/maps/.
+    """
+    from src.outputs.visualizations import generate_per_district_radiance_maps
+
+    count = None
+    error_tb = None
+
+    with StepTimer() as timer:
+        try:
+            count = generate_per_district_radiance_maps(
+                output_dir, latest_year, gdf, maps_output_dir=maps_dir,
+            )
+
+        except (FileNotFoundError, ValueError, KeyError) as exc:
+            error_tb = traceback.format_exc()
+            log.error("per_district_radiance_maps failed: %s", exc, exc_info=True)
+        except Exception:
+            error_tb = traceback.format_exc()
+            log.error("per_district_radiance_maps failed unexpectedly", exc_info=True)
+
+    if error_tb:
+        log_step_summary(log, "per_district_radiance_maps", "error", timing_seconds=timer.elapsed)
+        return StepResult(
+            step_name="per_district_radiance_maps",
+            status="error",
+            error=error_tb,
+            timing_seconds=timer.elapsed,
+        ), None
+
+    log_step_summary(
+        log, "per_district_radiance_maps", "success",
+        input_summary={"year": latest_year, "districts": len(gdf)},
+        output_summary={"maps_generated": count},
+        timing_seconds=timer.elapsed,
+    )
+    return StepResult(
+        step_name="per_district_radiance_maps",
+        status="success",
+        input_summary={"year": latest_year, "districts": len(gdf)},
+        output_summary={"maps_generated": count},
+        timing_seconds=timer.elapsed,
+    ), count

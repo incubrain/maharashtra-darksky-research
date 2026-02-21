@@ -111,6 +111,36 @@ def generate_district_maps(base_dir, shapefile_path):
                         output_path=os.path.join(maps_dir, "tier_distribution.png"),
                     )
 
+            # Animation frames (sprawl, differential, darkness, trend map)
+            from src.outputs.visualizations import (
+                generate_sprawl_frames,
+                generate_differential_frames,
+                generate_darkness_frames,
+                generate_trend_map,
+                generate_per_district_radiance_maps,
+            )
+
+            available_years = sorted(yearly_df["year"].unique().astype(int).tolist())
+
+            generate_sprawl_frames(
+                available_years, base_dir, gdf, maps_output_dir=maps_dir,
+            )
+            generate_differential_frames(
+                available_years, base_dir, gdf, maps_output_dir=maps_dir,
+            )
+            generate_darkness_frames(
+                available_years, base_dir, gdf, maps_output_dir=maps_dir,
+            )
+            generate_trend_map(
+                available_years, base_dir, gdf, maps_output_dir=maps_dir,
+            )
+
+            # Per-district radiance maps
+            latest_year = int(yearly_df["year"].max())
+            generate_per_district_radiance_maps(
+                base_dir, latest_year, gdf, maps_output_dir=maps_dir,
+            )
+
             log.info("District maps generated in %s", maps_dir)
 
         except Exception:
