@@ -19,30 +19,26 @@ All three can be run together with `--pipeline all`, or individually.
 ## Quick Start
 
 ```bash
-# Full district pipeline (most common)
+# Full pipeline (district + city + site)
+python3 -m src.pipeline_runner --pipeline all --download-shapefiles
+
+# District pipeline only
 python3 -m src.pipeline_runner --pipeline district --years 2012-2024
 
-# All three pipelines
-python3 -m src.pipeline_runner --pipeline all --years 2012-2024
+# With census cross-dataset analysis
+python3 -m src.pipeline_runner --datasets census
 
-# City pipeline only
-python3 -m src.pipeline_runner --pipeline city --years 2012-2024
-
-# Site pipeline only
-python3 -m src.pipeline_runner --pipeline site --years 2012-2024
+# Audit pipeline plan without running
+python3 -m src.pipeline_runner --pipeline all --dryrun
 
 # Single step from saved CSVs (no re-analysis)
-python3 -m src.pipeline_runner --pipeline district --step animation_frames
+python3 -m src.pipeline_runner --step animation_frames
 
 # Regenerate maps only (from saved CSVs, no re-analysis)
 python3 -m src.outputs.generate_maps --type all
 
 # Regenerate PDF reports only
 python3 -m src.outputs.generate_reports --type all
-
-# City/site pipeline standalone (alternative entry point)
-python3 -m src.site.site_analysis --type city --years 2012-2024
-python3 -m src.site.site_analysis --type site --years 2012-2024
 ```
 
 ---
@@ -54,15 +50,18 @@ python3 -m src.site.site_analysis --type site --years 2012-2024
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--pipeline` | `district` | `district`, `city`, `site`, or `all` |
+| `--dryrun` | off | Print pipeline steps and exit without running |
+| `--download-shapefiles` | off | Download district boundaries if missing |
 | `--step` | None | Run a single step from saved CSVs |
 | `--years` | `2012-2024` | Year range or comma-separated |
-| `--viirs-dir` | `config.DEFAULT_VIIRS_DIR` | VIIRS data root directory |
-| `--shapefile-path` | `config.DEFAULT_SHAPEFILE_PATH` | District boundaries GeoJSON |
-| `--output-dir` | `./outputs` | Output directory |
+| `--viirs-dir` | `./viirs` | VIIRS data root directory |
+| `--shapefile-path` | `./data/shapefiles/...` | District boundaries GeoJSON |
+| `--output-dir` | `./outputs` | Base output directory |
 | `--cf-threshold` | `5` | Cloud-free coverage threshold |
-| `--strict-validation` | `false` | Abort on Pandera schema violations |
-| `--datasets` | None | Enable cross-dataset analysis (e.g., `census_2011_pca`) |
-| `--buffer-km` | `config.SITE_BUFFER_RADIUS_KM` | Buffer radius for city/site analysis |
+| `--strict-validation` | off | Abort on Pandera schema violations |
+| `--datasets` | None | Group (`census`, `census_district`, `census_towns`), individual names, or `all` |
+| `--census-dir` | `data/census` | Override census data directory |
+| `--buffer-km` | `10` | Buffer radius in km for city/site analysis |
 | `--city-source` | `config` | City locations: `config` (43) or `census` (geocoded) |
 
 ### Available `--step` values for district pipeline

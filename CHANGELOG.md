@@ -5,6 +5,36 @@ VIIRS ALAN analysis pipeline.
 
 ## [Unreleased] - 2026-02-21
 
+### Pipeline Consolidation
+
+#### Single Entry Point
+- **Breaking:** Removed `main()`, `parse_args()`, `_create_run_dir()` from
+  `viirs_process.py`. The only entry point is now
+  `python3 -m src.pipeline_runner`.
+- `pipeline_runner.py` now creates timestamped run directories
+  (`outputs/runs/<timestamp>/`) with `outputs/latest` symlink on every full run.
+- Added `--download-shapefiles` flag (moved from the old `viirs_process` CLI).
+- Added `--dryrun` flag: prints all planned pipeline steps and exits without
+  executing, for easy flow auditing.
+
+#### Dataset Group Aliases
+- `--datasets census` now expands to all 8 census datasets (district + town).
+- `--datasets census_district` → 4 district-level census datasets.
+- `--datasets census_towns` → 4 town-level census datasets.
+- Individual dataset names and `all` still work as before.
+
+#### Log Noise Reduced
+- DBS "Background Floor" message demoted from INFO to DEBUG (~200 fewer log
+  lines per pipeline run).
+
+#### Legacy Code Removed
+- Removed `URBAN_BENCHMARKS` alias (use `URBAN_CITIES`).
+- Removed `CENSUS_2011_DISTRICT_COLUMNS` / `CENSUS_2011_DERIVED_RATIOS` aliases
+  (use `CENSUS_COMMON_COLUMNS` / `CENSUS_COMMON_DERIVED_RATIOS`).
+- Removed `OUTPUT_DIRS` dict from config (use `get_entity_dirs()`).
+- Removed duplicate `run_full_pipeline()` from `viirs_process.py` (identical
+  logic already in `pipeline_runner.run_district_pipeline()`).
+
 ### Visualization Pipeline Integration
 
 #### Animation Frames Integrated into District Pipeline

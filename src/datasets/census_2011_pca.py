@@ -176,7 +176,7 @@ def _load_single_file(filepath: str) -> pd.DataFrame | None:
 
         # Select relevant columns
         keep_cols = [name_col]
-        for col in config.CENSUS_2011_DISTRICT_COLUMNS:
+        for col in config.CENSUS_COMMON_COLUMNS:
             if col in df.columns:
                 keep_cols.append(col)
 
@@ -215,7 +215,7 @@ def _load_from_csv(
 
     # Keep only relevant columns
     keep_cols = [entity_col]
-    for col in config.CENSUS_2011_DISTRICT_COLUMNS:
+    for col in config.CENSUS_COMMON_COLUMNS:
         if col in df.columns:
             keep_cols.append(col)
     df = df[[c for c in keep_cols if c in df.columns]]
@@ -245,7 +245,7 @@ def _load_from_csv(
 
 def _compute_derived_ratios(df: pd.DataFrame) -> pd.DataFrame:
     """Compute derived ratio columns from raw census columns."""
-    for ratio_name, (numerator_expr, denominator) in config.CENSUS_2011_DERIVED_RATIOS.items():
+    for ratio_name, (numerator_expr, denominator) in config.CENSUS_COMMON_DERIVED_RATIOS.items():
         try:
             if "+" in numerator_expr:
                 # Sum of multiple columns (e.g. "MAIN_CL_P + MAIN_AL_P")

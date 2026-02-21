@@ -37,7 +37,7 @@ def extract_radial_profiles(raster_path, city_locations, year=None, radii_km=Non
 
     Args:
         raster_path: Path to radiance raster (e.g., maharashtra_median_2024.tif).
-        city_locations: Dict from config.URBAN_BENCHMARKS.
+        city_locations: Dict from config.URBAN_CITIES.
         radii_km: List of distances (default: config.URBAN_GRADIENT_RADII_KM).
         output_csv: Path to save results (optional).
 

@@ -549,7 +549,7 @@ def step_radial_gradient_analysis(
 
                 profiles_df = extract_radial_profiles(
                     raster_path=median_raster,
-                    city_locations=config.URBAN_BENCHMARKS,
+                    city_locations=config.URBAN_CITIES,
                     output_csv=os.path.join(csv_dir, f"urban_radial_profiles_{latest_year}.csv"),
                 )
 
@@ -835,7 +835,7 @@ def step_district_reports(
     with StepTimer() as timer:
         try:
             if reports_dir is None:
-                reports_dir = os.path.join(output_dir, config.OUTPUT_DIRS["district_reports"])
+                reports_dir = os.path.join(output_dir, "district", "reports")
             os.makedirs(reports_dir, exist_ok=True)
 
             generate_all_district_reports(

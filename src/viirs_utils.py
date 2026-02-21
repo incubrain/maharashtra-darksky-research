@@ -42,8 +42,8 @@ def apply_dynamic_background_subtraction(raster, year=None, percentile=1.0):
     if bg_mask.sum() > 0:
         floor = np.percentile(raster[bg_mask], percentile)
         year_str = f"Year {year} " if year else ""
-        log.info("%sBackground Floor (P%.1f): %.4f nW/cm²/sr", 
-                 year_str, percentile, floor)
+        log.debug("%sBackground Floor (P%.1f): %.4f nW/cm²/sr",
+                  year_str, percentile, floor)
         
         # Apply correction and clip at zero
         corrected = np.maximum(0, raster - floor)

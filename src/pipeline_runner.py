@@ -1,28 +1,23 @@
 #!/usr/bin/env python3
 """
-Pipeline runner with validation gates and single-step execution.
+Unified pipeline runner for Maharashtra VIIRS ALAN analysis.
 
-Orchestrates the full analysis pipeline with:
-- Pandera schema validation between steps (structure + data quality)
-- NaN propagation tracking between steps
-- ``--step`` CLI flag to run a single step from saved intermediate CSV
-- ``--strict-validation`` flag to abort on schema violations
-- Entity-aware output routing (district/city/site subdirectories)
-- Full PipelineRunResult provenance saved as JSON
-- Diagnostic report generation at the end of each run
+Single entry point for all pipelines (district, city, site).  Creates
+timestamped run directories, manages the ``outputs/latest`` symlink,
+and supports ``--dryrun`` for auditing the pipeline plan.
 
 Usage:
-    # Run full pipeline
-    python3 -m src.pipeline_runner --pipeline district --years 2012-2024
+    # Run everything (district + city + site)
+    python3 -m src.pipeline_runner --pipeline all --download-shapefiles
 
-    # Run single step from saved CSV
+    # District only with census cross-dataset analysis
+    python3 -m src.pipeline_runner --pipeline district --datasets census
+
+    # Audit planned steps without executing
+    python3 -m src.pipeline_runner --pipeline all --dryrun
+
+    # Re-run a single step from saved CSVs
     python3 -m src.pipeline_runner --pipeline district --step fit_trends
-
-    # Run site pipeline for dark-sky sites only
-    python3 -m src.pipeline_runner --pipeline site --years 2012-2024
-
-    # Run with strict validation (abort on schema violations)
-    python3 -m src.pipeline_runner --pipeline district --strict-validation
 """
 
 import argparse
@@ -96,7 +91,7 @@ def track_nan_counts(df, step_name, prev_nan_counts=None):
     return nan_counts
 
 
-# ── Validation helpers (legacy wrappers using Pandera) ───────────────────
+# ── Validation helpers ────────────────────────────────────────────────────
 
 
 def validate_yearly_radiance(df, step_name="yearly_radiance", strict=False):
@@ -543,7 +538,70 @@ def _run_single_district_step(step_name, args, years, dirs, pipeline_result):
     return pipeline_result
 
 
-# ── Main entry point ─────────────────────────────────────────────────────
+# ── Run directory management ──────────────────────────────────────────────
+
+
+def _create_run_dir(base_output_dir, args):
+    """Create a timestamped run directory and save a config snapshot.
+
+    Structure::
+
+        outputs/runs/2026-02-21_143022/
+            config_snapshot.json
+            subsets/{year}/
+            district/  csv/ maps/ reports/ diagnostics/
+            city/      csv/ maps/ reports/ diagnostics/
+            site/      csv/ maps/ reports/ diagnostics/
+        outputs/latest → runs/2026-02-21_143022  (symlink)
+
+    Returns the run-specific output directory path.
+    """
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    run_dir = os.path.join(base_output_dir, "runs", timestamp)
+    os.makedirs(run_dir, exist_ok=True)
+
+    # Create entity subdirectories
+    for entity in ["district", "city", "site"]:
+        entity_dirs = config.get_entity_dirs(run_dir, entity)
+        for d in entity_dirs.values():
+            os.makedirs(d, exist_ok=True)
+
+    # Save config snapshot
+    snapshot = {
+        "timestamp": timestamp,
+        "viirs_dir": args.viirs_dir,
+        "shapefile_path": args.shapefile_path,
+        "cf_threshold": args.cf_threshold,
+        "years": args.years,
+        "use_lit_mask": config.USE_LIT_MASK,
+        "use_cf_filter": config.USE_CF_FILTER,
+        "log_epsilon": config.LOG_EPSILON,
+        "bootstrap_resamples": config.BOOTSTRAP_RESAMPLES,
+        "site_buffer_radius_km": config.SITE_BUFFER_RADIUS_KM,
+        "alan_low_threshold": config.ALAN_LOW_THRESHOLD,
+        "alan_medium_threshold": config.ALAN_MEDIUM_THRESHOLD,
+        "pipeline": args.pipeline,
+        "datasets": args.datasets,
+    }
+    snapshot_path = os.path.join(run_dir, "config_snapshot.json")
+    with open(snapshot_path, "w") as f:
+        json.dump(snapshot, f, indent=2)
+    log.info("Config snapshot saved: %s", snapshot_path)
+
+    # Update 'latest' symlink
+    latest_link = os.path.join(base_output_dir, "latest")
+    rel_target = os.path.join("runs", timestamp)
+    try:
+        if os.path.islink(latest_link) or os.path.exists(latest_link):
+            os.remove(latest_link)
+        os.symlink(rel_target, latest_link)
+        log.info("Updated symlink: %s → %s", latest_link, rel_target)
+    except OSError as e:
+        log.warning("Could not create 'latest' symlink: %s", e)
+
+    return run_dir
 
 
 def save_pipeline_result(pipeline_result, output_dir):
@@ -555,20 +613,125 @@ def save_pipeline_result(pipeline_result, output_dir):
     return result_path
 
 
+# ── Dry-run ──────────────────────────────────────────────────────────────
+
+SITE_PIPELINE_STEPS = [
+    ("build_site_buffers", True),
+    ("compute_yearly_metrics", True),
+    ("save_site_yearly", True),
+    ("fit_site_trends", True),
+    ("site_maps", False),
+    ("spatial_analysis", False),
+    ("sky_brightness", False),
+    ("site_stability", False),
+    ("site_breakpoints", False),
+    ("site_benchmark", False),
+    ("site_reports", False),
+]
+
+
+def _print_dryrun(args, pipelines):
+    """Print the planned pipeline steps and exit."""
+    from src.dataset_aggregator import get_enabled_datasets, DATASET_GROUPS
+
+    print("\n" + "=" * 60)
+    print("DRY RUN — Pipeline Plan")
+    print("=" * 60)
+    print(f"  Pipeline:        {args.pipeline}")
+    print(f"  Years:           {args.years}")
+    print(f"  VIIRS dir:       {args.viirs_dir}")
+    print(f"  Shapefile:       {args.shapefile_path}")
+    print(f"  Output dir:      {args.output_dir}")
+    print(f"  CF threshold:    {args.cf_threshold}")
+    if args.datasets:
+        enabled = get_enabled_datasets(args)
+        print(f"  Datasets:        {args.datasets} → {enabled}")
+    print()
+
+    for pipeline_type in pipelines:
+        print(f"─── {pipeline_type.upper()} PIPELINE ───")
+
+        if pipeline_type == "district":
+            critical_steps = {
+                "load_boundaries", "process_years", "save_yearly", "fit_trends",
+            }
+            for i, step_name in enumerate(DISTRICT_STEPS, 1):
+                crit = "CRITICAL" if step_name in critical_steps else "optional"
+                gated = ""
+                if step_name.startswith(("load_datasets", "merge_datasets",
+                                         "cross_correlation", "cross_classification",
+                                         "cross_dataset_reports")):
+                    if not args.datasets:
+                        gated = " [SKIPPED — no --datasets]"
+                    else:
+                        gated = f" [gated by --datasets {args.datasets}]"
+                print(f"  {i:2d}. {step_name:<32s} ({crit}){gated}")
+
+        elif pipeline_type in ("city", "site"):
+            for i, (step_name, critical) in enumerate(SITE_PIPELINE_STEPS, 1):
+                crit = "CRITICAL" if critical else "optional"
+                print(f"  {i:2d}. {step_name:<32s} ({crit})")
+
+        print()
+
+    print("Output directory structure:")
+    print("  outputs/runs/<timestamp>/")
+    print("    config_snapshot.json")
+    print("    subsets/{year}/")
+    for entity in pipelines:
+        if entity == "all":
+            continue
+        print(f"    {entity}/")
+        print(f"      csv/  maps/  reports/  diagnostics/")
+    print("  outputs/latest → runs/<timestamp>")
+    print()
+    print("=" * 60)
+    print("No changes made. Remove --dryrun to execute.")
+    print("=" * 60)
+
+
+# ── CLI ──────────────────────────────────────────────────────────────────
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Pipeline runner with validation gates"
+        description="Maharashtra VIIRS ALAN Analysis Pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Full pipeline (district + city + site)
+  python3 -m src.pipeline_runner --pipeline all --download-shapefiles
+
+  # District only with census cross-analysis
+  python3 -m src.pipeline_runner --datasets census
+
+  # Audit steps without running
+  python3 -m src.pipeline_runner --pipeline all --dryrun
+""",
     )
     parser.add_argument(
         "--pipeline",
         choices=["district", "city", "site", "all"],
         default="district",
-        help="Which pipeline to run",
+        help="Which pipeline to run (default: district)",
     )
     parser.add_argument(
         "--step",
         default=None,
         help="Run a single step from saved CSVs (e.g., 'fit_trends')",
+    )
+    parser.add_argument(
+        "--dryrun",
+        action="store_true",
+        default=False,
+        help="Print pipeline steps and exit without running",
+    )
+    parser.add_argument(
+        "--download-shapefiles",
+        action="store_true",
+        default=False,
+        dest="download_shapefiles",
+        help="Download Maharashtra district shapefiles if not present",
     )
     parser.add_argument(
         "--viirs-dir",
@@ -583,24 +746,24 @@ def parse_args():
     parser.add_argument(
         "--output-dir",
         default=config.DEFAULT_OUTPUT_DIR,
-        help="Output directory",
+        help="Base output directory (default: ./outputs)",
     )
     parser.add_argument(
         "--cf-threshold",
         type=int,
         default=config.CF_COVERAGE_THRESHOLD,
-        help="Cloud-free coverage threshold",
+        help="Cloud-free coverage threshold (default: %(default)s)",
     )
     parser.add_argument(
         "--years",
         default="2012-2024",
-        help="Year range or comma-separated years",
+        help="Year range or comma-separated years (default: 2012-2024)",
     )
     parser.add_argument(
         "--datasets",
         default=None,
-        help="Comma-separated dataset names to enable (e.g. 'census_2011_pca') "
-             "or 'all' to enable all configured datasets. Overrides config.py.",
+        help="Datasets to enable: group name (census, census_district, "
+             "census_towns), individual names, or 'all'",
     )
     parser.add_argument(
         "--census-dir",
@@ -626,7 +789,7 @@ def parse_args():
         type=float,
         default=config.SITE_BUFFER_RADIUS_KM,
         dest="buffer_km",
-        help="Buffer radius in km for site/city analysis (default: from config)",
+        help="Buffer radius in km for site/city analysis (default: %(default)s)",
     )
     parser.add_argument(
         "--city-source",
@@ -703,24 +866,49 @@ def main():
     # Generate a fresh run_id for this pipeline invocation
     run_id = set_run_id()
 
-    # Resolve output dir
+    pipelines = (
+        ["district", "city", "site"] if args.pipeline == "all" else [args.pipeline]
+    )
+
+    # ── Dry-run: print plan and exit ──────────────────────────────────
+    if args.dryrun:
+        _print_dryrun(args, pipelines)
+        return
+
+    # ── Download shapefiles if requested ──────────────────────────────
+    if args.download_shapefiles or not os.path.exists(args.shapefile_path):
+        from src.viirs_process import download_shapefiles
+        args.shapefile_path = download_shapefiles()
+
+    # ── Resolve output directory ──────────────────────────────────────
     base_dir = args.output_dir
-    latest_dir = os.path.join(base_dir, "latest")
-    if os.path.isdir(latest_dir):
-        args.output_dir = latest_dir
-        log.info("Using latest run directory: %s", args.output_dir)
+
+    if args.step:
+        # Single-step mode: use existing latest run dir
+        latest = os.path.join(base_dir, "latest")
+        if os.path.isdir(latest):
+            args.output_dir = os.path.realpath(latest)
+            log.info("Using latest run directory: %s", args.output_dir)
+    else:
+        # Full run: create fresh timestamped run directory
+        args.output_dir = _create_run_dir(base_dir, args)
 
     # Set up structured logging
     setup_logging(run_dir=args.output_dir)
 
     log.info("Pipeline runner: %s (run_id=%s)", args.pipeline, run_id)
+    log.info("Configuration:")
+    log.info("  VIIRS dir:      %s", args.viirs_dir)
+    log.info("  Shapefile:      %s", args.shapefile_path)
+    log.info("  Output dir:     %s", args.output_dir)
+    log.info("  CF threshold:   %d", args.cf_threshold)
+    log.info("  Years:          %s", args.years)
+    if args.datasets:
+        log.info("  Datasets:       %s", args.datasets)
     if args.step:
-        log.info("Single step mode: %s", args.step)
+        log.info("  Single step:    %s", args.step)
 
-    pipelines = (
-        ["district", "city", "site"] if args.pipeline == "all" else [args.pipeline]
-    )
-
+    # ── Run pipelines ─────────────────────────────────────────────────
     for pipeline_type in pipelines:
         log.info("=" * 60)
         log.info("Running %s pipeline", pipeline_type)
@@ -743,6 +931,10 @@ def main():
             )
         else:
             log.info("All steps succeeded.")
+
+    log.info("\nPipeline complete!")
+    log.info("Outputs: %s", args.output_dir)
+    log.info("Latest:  %s/latest/", base_dir)
 
 
 if __name__ == "__main__":

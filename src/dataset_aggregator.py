@@ -18,34 +18,65 @@ from src.logging_config import get_pipeline_logger
 
 log = get_pipeline_logger(__name__)
 
+# Group aliases: short names that expand to multiple datasets.
+# Use via --datasets census, --datasets census_district, etc.
+DATASET_GROUPS = {
+    "census": [
+        "census_1991", "census_2001", "census_2011",
+        "census_projected",
+        "census_1991_towns", "census_2001_towns", "census_2011_towns",
+        "census_towns_projected",
+    ],
+    "census_district": [
+        "census_1991", "census_2001", "census_2011", "census_projected",
+    ],
+    "census_towns": [
+        "census_1991_towns", "census_2001_towns", "census_2011_towns",
+        "census_towns_projected",
+    ],
+}
+
 
 def get_enabled_datasets(args) -> list[str]:
     """Determine which datasets are enabled from config + CLI overrides.
 
+    Supports group aliases (e.g. ``--datasets census`` expands to all
+    census datasets).  Use ``--datasets all`` for everything.
+
     Parameters
     ----------
     args : argparse.Namespace
-        Must have ``datasets`` attribute (comma-separated names or "all").
+        Must have ``datasets`` attribute (comma-separated names/groups or "all").
 
     Returns
     -------
     list[str]
         Sorted list of enabled dataset names.
     """
-    # CLI override
     if hasattr(args, "datasets") and args.datasets:
         if args.datasets == "all":
             return sorted(DATASET_REGISTRY.keys())
-        names = [n.strip() for n in args.datasets.split(",")]
-        valid = [n for n in names if n in DATASET_REGISTRY]
-        invalid = [n for n in names if n not in DATASET_REGISTRY]
+
+        raw_names = [n.strip() for n in args.datasets.split(",")]
+
+        # Expand group aliases
+        expanded = []
+        for n in raw_names:
+            if n in DATASET_GROUPS:
+                expanded.extend(DATASET_GROUPS[n])
+            else:
+                expanded.append(n)
+
+        valid = sorted(set(n for n in expanded if n in DATASET_REGISTRY))
+        invalid = [n for n in expanded if n not in DATASET_REGISTRY]
         if invalid:
             log.warning(
-                "Unknown datasets ignored: %s. Available: %s",
+                "Unknown datasets ignored: %s. Available: %s (groups: %s)",
                 invalid,
                 list(DATASET_REGISTRY.keys()),
+                list(DATASET_GROUPS.keys()),
             )
-        return sorted(valid)
+        return valid
 
     # Fall back to config
     enabled = []

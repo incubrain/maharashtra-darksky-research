@@ -155,10 +155,10 @@ class TestCitySourceIntegration:
     """Test that city_source='census' wires through the pipeline correctly."""
 
     def test_build_locations_filtered_config(self):
-        """Default city_source='config' should use URBAN_BENCHMARKS."""
+        """Default city_source='config' should use URBAN_CITIES."""
         from src.site.site_analysis import _build_locations_filtered
         locations = _build_locations_filtered(entity_type="city", city_source="config")
-        assert len(locations) == len(config.URBAN_BENCHMARKS)
+        assert len(locations) == len(config.URBAN_CITIES)
 
     def test_build_locations_filtered_census(self, tmp_path, monkeypatch):
         """city_source='census' should load from census_town_locations."""

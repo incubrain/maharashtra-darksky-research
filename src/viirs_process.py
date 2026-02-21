@@ -1,28 +1,18 @@
-#!/usr/bin/env python3
 """
-Maharashtra VIIRS Nighttime Lights: ALAN Trend Analysis (2012-2024)
+VIIRS raster processing functions for Maharashtra ALAN analysis.
 
-Processes VIIRS DNB annual composites to compute district-level
-Artificial Light at Night (ALAN) trends for Maharashtra, India.
+Core functions for downloading, unpacking, subsetting, filtering, and
+aggregating VIIRS DNB annual composites.  These are called by the pipeline
+step functions in ``src/pipeline_steps.py``.
 
-Methods follow Section 3.1 of "Preserving India's Rural Night Skies".
-
-Usage (run from project root):
-    python3 -m src.viirs_process [--viirs-dir ./viirs] [--shapefile-path ./data/shapefiles/maharashtra_district.geojson]
-                                 [--output-dir ./outputs] [--cf-threshold 5] [--years 2012-2024]
-                                 [--download-shapefiles]
+Entry point: ``python3 -m src.pipeline_runner``
 """
 
-import argparse
 import gzip
-from src.logging_config import get_pipeline_logger
 import os
 import shutil
-import sys
-import tempfile
 import warnings
 from glob import glob
-from pathlib import Path
 
 import geopandas as gpd
 import matplotlib
@@ -34,13 +24,11 @@ import rasterio
 import rasterio.mask
 import requests
 from rasterstats import zonal_stats
-from scipy import stats as scipy_stats
 from shapely.geometry import mapping
-import statsmodels.api as sm
 
 from src import config
 from src.formulas.trend import fit_log_linear_trend as _core_fit_trend
-from src.formulas.classification import classify_alan
+from src.logging_config import get_pipeline_logger
 
 warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
 log = get_pipeline_logger(__name__)
@@ -469,152 +457,14 @@ def process_single_year(year, viirs_dir, gdf, output_dir, cf_threshold=None):
     return df
 
 
-def run_full_pipeline(args):
-    """Orchestrate the full district analysis pipeline."""
-    from src.pipeline_steps import (
-        step_load_boundaries,
-        step_process_years,
-        step_save_yearly_radiance,
-        step_fit_trends,
-        step_stability_analysis,
-        step_breakpoint_detection,
-        step_trend_diagnostics,
-        step_quality_diagnostics,
-        step_benchmark_comparison,
-        step_radial_gradient_analysis,
-        step_light_dome_modeling,
-        step_generate_basic_maps,
-        step_statewide_visualizations,
-        step_graduated_classification,
-        step_district_reports,
-    )
-
-    steps = []
-
-    # Step 1: Load boundaries
-    result, gdf = step_load_boundaries(args.shapefile_path)
-    steps.append(result)
-    if not result.ok:
-        log.error("Pipeline aborted: %s", result.error)
-        sys.exit(1)
-
-    # Step 2: Parse years
-    if "-" in args.years:
-        start, end = args.years.split("-")
-        years = list(range(int(start), int(end) + 1))
-    else:
-        years = [int(y) for y in args.years.split(",")]
-
-    # Step 3: Process years (critical)
-    result, yearly_df = step_process_years(years, args.viirs_dir, gdf, args.output_dir, args.cf_threshold)
-    steps.append(result)
-    if not result.ok:
-        log.error("Pipeline aborted: no data processed")
-        sys.exit(1)
-
-    # Prepare output directories (entity-based)
-    dirs = config.get_entity_dirs(args.output_dir, "district")
-    csv_dir = dirs["csv"]
-    maps_dir = dirs["maps"]
-    diagnostics_dir = dirs["diagnostics"]
-
-    # Step 4: Save yearly radiance (critical)
-    result, yearly_path = step_save_yearly_radiance(yearly_df, csv_dir)
-    steps.append(result)
-    if not result.ok:
-        log.error("Failed to save yearly radiance: %s", result.error)
-        sys.exit(1)
-
-    # Step 5: Fit trends (critical)
-    result, trends_df = step_fit_trends(yearly_df, csv_dir)
-    steps.append(result)
-    if not result.ok:
-        log.error("Pipeline aborted: trend fitting failed")
-        sys.exit(1)
-
-    # Step 6: Generate basic maps (non-critical)
-    result, _ = step_generate_basic_maps(gdf, trends_df, yearly_df, args.output_dir, maps_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Basic maps failed: %s", result.error)
-
-    # Step 7: Stability analysis (non-critical)
-    result, stability_df = step_stability_analysis(yearly_df, csv_dir, diagnostics_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Stability analysis failed: %s", result.error)
-        stability_df = None
-
-    # Step 8: Breakpoint detection (non-critical)
-    result, breakpoints_df = step_breakpoint_detection(yearly_df, csv_dir, diagnostics_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Breakpoint detection failed: %s", result.error)
-        breakpoints_df = None
-
-    # Step 9: Trend diagnostics (non-critical)
-    result, diag_df = step_trend_diagnostics(yearly_df, csv_dir, diagnostics_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Trend diagnostics failed: %s", result.error)
-        diag_df = None
-
-    # Step 10: Quality diagnostics (non-critical)
-    result, quality_df = step_quality_diagnostics(years, args.output_dir, gdf, csv_dir, diagnostics_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Quality diagnostics failed: %s", result.error)
-        quality_df = None
-
-    # Step 11: Benchmark comparison (non-critical)
-    result, _ = step_benchmark_comparison(trends_df, csv_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Benchmark comparison failed: %s", result.error)
-
-    # Step 12: Radial gradient analysis (non-critical)
-    latest_year = yearly_df["year"].max()
-    result, profiles_df = step_radial_gradient_analysis(args.output_dir, latest_year, csv_dir, maps_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Radial gradient analysis failed: %s", result.error)
-        profiles_df = None
-
-    # Step 13: Light dome modeling (non-critical, requires profiles)
-    if profiles_df is not None:
-        result, dome_metrics = step_light_dome_modeling(profiles_df, csv_dir, maps_dir)
-        steps.append(result)
-        if not result.ok:
-            log.warning("Light dome modeling failed: %s", result.error)
-
-    # Step 14: Statewide visualizations (non-critical)
-    result, _ = step_statewide_visualizations(yearly_df, trends_df, gdf, quality_df, args.output_dir, maps_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Statewide visualizations failed: %s", result.error)
-
-    # Step 15: Graduated classification (non-critical)
-    result, _ = step_graduated_classification(yearly_df, csv_dir, maps_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("Graduated classification failed: %s", result.error)
-
-    # Step 16: District reports (non-critical)
-    reports_dir = dirs["reports"]
-    result, _ = step_district_reports(yearly_df, trends_df, stability_df, gdf, args.output_dir, reports_dir)
-    steps.append(result)
-    if not result.ok:
-        log.warning("District reports failed: %s", result.error)
-
-    return trends_df, yearly_df
-
-
 # ---------------------------------------------------------------------------
-# Step 6: Visualization
+# Visualization (called by pipeline_steps.step_generate_basic_maps)
 # ---------------------------------------------------------------------------
 
 def generate_maps(gdf, trends_df, yearly_df, output_dir):
     """Generate publication-quality maps and charts."""
+    import matplotlib.colors as mcolors
+
     maps_dir = os.path.join(output_dir, "maps")
     os.makedirs(maps_dir, exist_ok=True)
 
@@ -641,10 +491,8 @@ def generate_maps(gdf, trends_df, yearly_df, output_dir):
     log.info("Saved: %s", path)
 
     # 2. Choropleth: Latest median radiance (log scale for visibility)
-    import matplotlib.colors as mcolors
     fig, ax = plt.subplots(1, 1, figsize=(12, 10))
     radiance_col = "median_radiance_latest"
-    # Use log-norm so Mumbai doesn't dominate the color scale
     vmin = max(gdf_plot[radiance_col].min(), 0.1)
     vmax = gdf_plot[radiance_col].max()
     norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
@@ -688,140 +536,3 @@ def generate_maps(gdf, trends_df, yearly_df, output_dir):
     fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight")
     plt.close(fig)
     log.info("Saved: %s", path)
-
-    # Note: radiance heatmap consolidated into radiance_heatmap_log.png
-    # (generated by visualization_suite.create_enhanced_radiance_heatmap)
-
-
-# ---------------------------------------------------------------------------
-# Main entry point
-# ---------------------------------------------------------------------------
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Maharashtra VIIRS ALAN Trend Analysis (2012-2024)"
-    )
-    parser.add_argument("--viirs-dir", default=config.DEFAULT_VIIRS_DIR,
-                        help="Root directory containing year folders with .gz files")
-    parser.add_argument("--shapefile-path",
-                        default=config.DEFAULT_SHAPEFILE_PATH,
-                        help="Path to Maharashtra district boundaries (GeoJSON)")
-    parser.add_argument("--output-dir", default=config.DEFAULT_OUTPUT_DIR,
-                        help="Output directory for CSVs and maps")
-    parser.add_argument("--cf-threshold", type=int, default=config.CF_COVERAGE_THRESHOLD,
-                        help="Minimum cloud-free coverage threshold (default: %(default)s)")
-    parser.add_argument("--years", default="2012-2024",
-                        help="Year range (e.g., '2012-2024') or comma-separated years")
-    parser.add_argument("--download-shapefiles", action="store_true",
-                        help="Download Maharashtra shapefiles if not present")
-    return parser.parse_args()
-
-
-def _create_run_dir(base_output_dir, args):
-    """Create a timestamped run directory and save the config snapshot.
-
-    Structure:
-        outputs/runs/2026-02-11_143022/
-            config_snapshot.json   ← frozen settings for this run
-            subsets/{year}/        ← shared rasters
-            district/
-              csv/                 ← district analysis results
-              maps/                ← district visualizations
-              reports/             ← district PDFs
-              diagnostics/         ← district diagnostic plots
-            city/
-              csv/                 ← city analysis results
-              maps/                ← city visualizations
-              reports/             ← city PDFs
-              diagnostics/
-            site/
-              csv/                 ← site analysis results
-              maps/                ← site visualizations
-              reports/             ← site PDFs
-              diagnostics/
-        outputs/latest → runs/2026-02-11_143022  (symlink)
-
-    Returns the run-specific output directory path.
-    """
-    import json
-    from datetime import datetime
-
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    run_dir = os.path.join(base_output_dir, "runs", timestamp)
-    os.makedirs(run_dir, exist_ok=True)
-
-    # Create entity subdirectories
-    for entity in ["district", "city", "site"]:
-        entity_dirs = config.get_entity_dirs(run_dir, entity)
-        for d in entity_dirs.values():
-            os.makedirs(d, exist_ok=True)
-
-    # Save config snapshot
-    snapshot = {
-        "timestamp": timestamp,
-        "viirs_dir": args.viirs_dir,
-        "shapefile_path": args.shapefile_path,
-        "cf_threshold": args.cf_threshold,
-        "years": args.years,
-        "use_lit_mask": config.USE_LIT_MASK,
-        "use_cf_filter": config.USE_CF_FILTER,
-        "log_epsilon": config.LOG_EPSILON,
-        "bootstrap_resamples": config.BOOTSTRAP_RESAMPLES,
-        "site_buffer_radius_km": config.SITE_BUFFER_RADIUS_KM,
-        "alan_low_threshold": config.ALAN_LOW_THRESHOLD,
-        "alan_medium_threshold": config.ALAN_MEDIUM_THRESHOLD,
-    }
-    snapshot_path = os.path.join(run_dir, "config_snapshot.json")
-    with open(snapshot_path, "w") as f:
-        json.dump(snapshot, f, indent=2)
-    log.info("Config snapshot saved: %s", snapshot_path)
-
-    # Update 'latest' symlink
-    latest_link = os.path.join(base_output_dir, "latest")
-    rel_target = os.path.join("runs", timestamp)
-    try:
-        if os.path.islink(latest_link):
-            os.remove(latest_link)
-        elif os.path.exists(latest_link):
-            os.remove(latest_link)
-        os.symlink(rel_target, latest_link)
-        log.info("Updated symlink: %s → %s", latest_link, rel_target)
-    except OSError as e:
-        log.warning("Could not create 'latest' symlink: %s", e)
-
-    return run_dir
-
-
-def main():
-    args = parse_args()
-
-    log.info("Maharashtra VIIRS ALAN Trend Analysis")
-    log.info("Configuration:")
-    log.info("  VIIRS dir:      %s", args.viirs_dir)
-    log.info("  Shapefile:      %s", args.shapefile_path)
-    log.info("  Output dir:     %s", args.output_dir)
-    log.info("  CF threshold:   %d", args.cf_threshold)
-    log.info("  Years:          %s", args.years)
-
-    if args.download_shapefiles or not os.path.exists(args.shapefile_path):
-        args.shapefile_path = download_shapefiles()
-
-    # Create run-specific output directory with config snapshot
-    base_output_dir = args.output_dir
-    run_dir = _create_run_dir(base_output_dir, args)
-    args.output_dir = run_dir
-    log.info("  Run dir:        %s", run_dir)
-
-    trends_df, yearly_df = run_full_pipeline(args)
-
-    log.info("\nPipeline complete!")
-    log.info("Outputs:")
-    log.info("  Run dir: %s", run_dir)
-    log.info("  CSV:     %s/csv/districts_trends.csv", run_dir)
-    log.info("  CSV:     %s/csv/districts_yearly_radiance.csv", run_dir)
-    log.info("  Maps:    %s/maps/", run_dir)
-    log.info("  Latest:  %s/latest/", base_output_dir)
-
-
-if __name__ == "__main__":
-    main()

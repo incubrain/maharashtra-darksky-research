@@ -42,7 +42,7 @@ maharashtra-darksky-research/
 │   ├── generate_reports.py            # Independent PDF report generation
 │   │
 │   │   # Core pipelines
-│   ├── viirs_process.py               # District-level pipeline (thin orchestrator)
+│   ├── viirs_process.py               # Core VIIRS raster processing functions
 │   ├── site_analysis.py               # Site-level pipeline (--type city|site|all)
 │   ├── download_viirs.py              # Data download / synthetic test data generator
 │   ├── validate_names.py              # District name cross-validation
@@ -144,19 +144,20 @@ maharashtra-darksky-research/
 The pipeline is organized into 4 independently runnable stages:
 
 ```
-1. PREPROCESS  →  subsets/{year}/
-   python3 -m src.preprocess --years 2012-2024
+# Single entry point for all pipelines
+python3 -m src.pipeline_runner --pipeline all --download-shapefiles
 
-2. ANALYZE     →  {entity}/csv/ + {entity}/diagnostics/
-   python3 -m src.viirs_process          # district analysis
-   python3 -m src.site_analysis --type city   # city analysis
-   python3 -m src.site_analysis --type site   # dark-sky site analysis
+# Or individual pipelines
+python3 -m src.pipeline_runner --pipeline district
+python3 -m src.pipeline_runner --pipeline city
+python3 -m src.pipeline_runner --pipeline site
 
-3. VISUALIZE   →  {entity}/maps/
-   python3 -m src.generate_maps --type all
+# Audit flow without running
+python3 -m src.pipeline_runner --pipeline all --dryrun
 
-4. REPORT      →  {entity}/reports/
-   python3 -m src.generate_reports --type all
+# Regenerate maps/reports from saved CSVs
+python3 -m src.outputs.generate_maps --type all
+python3 -m src.outputs.generate_reports --type all
 ```
 
 ### Formulas Subpackage (`src/formulas/`)
@@ -227,36 +228,23 @@ Orchestrator with validation gates between steps:
 | `--output-dir` | `./outputs` | Output directory |
 | `--years` | `2012-2024` | Year range or comma-separated list |
 
-### `python3 -m src.viirs_process`
+### `python3 -m src.pipeline_runner` (single entry point)
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--pipeline` | `district` | `district`, `city`, `site`, or `all` |
+| `--dryrun` | off | Print pipeline steps and exit without running |
+| `--download-shapefiles` | off | Download district boundaries if missing |
+| `--step` | (none) | Run single step by name (e.g., `fit_trends`) |
 | `--viirs-dir` | `./viirs` | Root directory with year folders |
 | `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District boundaries |
-| `--output-dir` | `./outputs` | Output directory |
+| `--output-dir` | `./outputs` | Base output directory |
 | `--cf-threshold` | `5` | Minimum cloud-free observations |
 | `--years` | `2012-2024` | Year range or comma-separated list |
-| `--download-shapefiles` | off | Auto-download shapefiles if missing |
-
-### `python3 -m src.site_analysis`
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--type` | `all` | Entity type: `city`, `site`, or `all` |
-| `--output-dir` | `./outputs` | Output directory (must match viirs_process.py) |
-| `--shapefile-path` | `./data/shapefiles/maharashtra_district.geojson` | District boundaries |
-| `--buffer-km` | `10` | Buffer radius around sites (km) |
-| `--cf-threshold` | `5` | Minimum cloud-free observations |
-| `--years` | `2012-2024` | Year range |
-
-### `python3 -m src.pipeline_runner`
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--pipeline` | `district` | Pipeline: `district`, `city`, `site`, or `all` |
-| `--step` | (none) | Run single step by name (e.g., `fit_trends`) |
-| `--output-dir` | `./outputs` | Output directory |
-| `--years` | `2012-2024` | Year range |
+| `--datasets` | (none) | Group (`census`, `census_district`, `census_towns`), names, or `all` |
+| `--census-dir` | `data/census` | Override census data directory |
+| `--buffer-km` | `10` | Buffer radius for city/site analysis |
+| `--city-source` | `config` | `config` (43 cities) or `census` (geocoded towns) |
 | `--strict-validation` | off | Abort pipeline on Pandera schema failures |
 | `--compare-run` | (none) | Path to previous run for comparison |
 

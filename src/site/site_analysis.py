@@ -44,9 +44,9 @@ ALAN_COLORS = {"high": "#d62728", "medium": "#ff7f0e", "low": "#2ca02c"}
 
 
 def _build_locations():
-    """Build LOCATIONS dict from config.URBAN_BENCHMARKS and config.DARKSKY_SITES."""
+    """Build LOCATIONS dict from config.URBAN_CITIES and config.DARKSKY_SITES."""
     locations = {}
-    for name, info in config.URBAN_BENCHMARKS.items():
+    for name, info in config.URBAN_CITIES.items():
         locations[name] = (info["lat"], info["lon"], "city", info["district"])
     for name, info in config.DARKSKY_SITES.items():
         locations[name] = (info["lat"], info["lon"], "site", info["district"])
@@ -61,7 +61,7 @@ def _build_locations_filtered(entity_type="all", city_source="config"):
     entity_type : str
         "city", "site", or "all".
     city_source : str
-        "config" uses config.URBAN_BENCHMARKS (43 hand-picked cities).
+        "config" uses config.URBAN_CITIES (43 hand-picked cities).
         "census" uses geocoded census towns (up to 629).
     """
     locations = {}
@@ -73,7 +73,7 @@ def _build_locations_filtered(entity_type="all", city_source="config"):
                 locations[name] = (info["lat"], info["lon"], "city", info["district"])
             log.info("Loaded %d census towns as city locations", len(towns))
         else:
-            for name, info in config.URBAN_BENCHMARKS.items():
+            for name, info in config.URBAN_CITIES.items():
                 locations[name] = (info["lat"], info["lon"], "city", info["district"])
     if entity_type in ("site", "all"):
         for name, info in config.DARKSKY_SITES.items():
