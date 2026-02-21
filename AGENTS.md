@@ -340,7 +340,7 @@ pytest tests/ -v
 pytest tests/ --cov=src --cov-report=term-missing
 ```
 
-Coverage is configured in `pyproject.toml` with `fail_under = 50` (branch coverage enabled).
+Coverage is configured in `pyproject.toml` with `fail_under = 15` (branch coverage enabled).
 
 ### Custom Markers
 
@@ -467,6 +467,23 @@ Ensure you're running from the project root directory.
 
 ### Schema validation failures
 Use `--strict-validation` to abort on failures, or check the log for WARNING-level schema messages. The diagnostic report lists all validation issues.
+
+### Zonal stats returning all None / pixel_count=0
+This was caused by a GDAL MemoryFile corruption bug (fixed in `193dff0`). If you
+see this pattern, it means `zonal_stats()` is being called with a file path
+(MemoryFile or on-disk) after prior large raster operations have corrupted GDAL's
+internal state. The fix is to pass numpy arrays + affine transforms directly:
+```python
+# WRONG — silently fails after large rasterio.mask.mask() calls:
+zonal_stats(gdf, src.name, stats=[...], nodata=np.nan)
+
+# CORRECT — bypasses GDAL RasterIO, always reliable:
+zonal_stats(gdf, array, stats=[...], nodata=np.nan, affine=transform)
+```
+Root cause: rasterio (GDAL 3.12) and fiona (GDAL 3.9) link different GDAL versions.
+The `rasterio.mask.mask()` call on ~11 GB global composites leaves GDAL's
+`GDALRasterIOExtraArg` struct version in an inconsistent state, causing subsequent
+MemoryFile reads to fail silently (returns `None` for all stats, `0` for count).
 
 ### Debugging data quality issues
 1. Run `python -m src.data_audit --histograms` to see radiance distributions
