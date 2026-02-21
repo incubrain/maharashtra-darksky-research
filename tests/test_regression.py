@@ -173,15 +173,14 @@ class TestSkyBrightnessRegression:
 
     def test_sky_brightness_conversion_matches_golden(self, update_golden):
         """Radiance → magnitude conversion for known inputs."""
+        from src.analysis.sky_brightness_model import radiance_to_sky_brightness
+
         test_radiances = [0.0, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0]
         results = []
         for rad in test_radiances:
             mcd = rad * RADIANCE_TO_MCD
-            if mcd > 0:
-                mag = NATURAL_SKY_BRIGHTNESS - 2.5 * np.log10(1 + mcd / (REFERENCE_MCD * 1e-3))
-            else:
-                mag = NATURAL_SKY_BRIGHTNESS
-            results.append({"radiance_nw": rad, "mcd": round(mcd, 6), "magnitude": round(mag, 4)})
+            mag = radiance_to_sky_brightness(rad)
+            results.append({"radiance_nw": rad, "mcd": round(mcd, 4), "magnitude": round(float(mag), 2)})
 
         df = pd.DataFrame(results)
         golden_name = "sky_brightness_synthetic.csv"

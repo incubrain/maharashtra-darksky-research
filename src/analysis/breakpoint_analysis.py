@@ -3,6 +3,30 @@ Trend breakpoint detection using piecewise linear regression.
 
 Identifies years where ALAN growth rate changed significantly
 (acceleration/deceleration) using AIC-based model selection.
+
+KNOWN FINDING — Universal 2016 Breakpoint:
+    In full diagnostic runs against VNL v2.1/v2.2 annual composites for
+    Maharashtra (2012–2024), 34 out of 36 districts show a breakpoint in
+    2016.  This is driven by TWO confounded factors:
+
+    1. VIIRS product evolution:
+       - 2012–2013: vcmcfg (no stray-light correction) — baseline noise
+         is lower, broad-area radiance is systematically fainter.
+       - 2014+:     vcmslcfg (stray-light corrected) — improved
+         calibration and noise floor shift.
+       - The 2016 detection is an artifact of the AIC model selecting the
+         year that best separates the two radiometric regimes.
+
+    2. Real-world events:
+       - India's Deen Dayal Upadhyaya Gram Jyoti Yojana (DDUGJY) rural
+         electrification program (2015–2019) and Ujala LED programme
+         (2015+) drove genuine step-changes in nighttime radiance.
+
+    IMPLICATION: A single-breakpoint model is too coarse for this data.
+    Future work should consider:
+       - Multi-breakpoint detection (BIC-penalised to avoid overfitting).
+       - Separate trend fitting for pre-2014 vs post-2014 periods.
+       - Including VIIRS product version as a covariate in the regression.
 """
 
 from src.logging_config import get_pipeline_logger

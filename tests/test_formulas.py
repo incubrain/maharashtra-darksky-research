@@ -247,7 +247,7 @@ class TestFitLogLinearTrend:
 
 class TestSkyBrightnessConstants:
     def test_natural_sky_brightness(self):
-        assert NATURAL_SKY_BRIGHTNESS == 21.6
+        assert NATURAL_SKY_BRIGHTNESS == 22.0
 
     def test_radiance_to_mcd_positive(self):
         assert RADIANCE_TO_MCD > 0

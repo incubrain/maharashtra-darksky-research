@@ -53,7 +53,7 @@ def radiance_to_sky_brightness(radiance_nw):
     # Convert to mcd/m² (artificial component)
     artificial_mcd = radiance_nw * RADIANCE_TO_MCD
 
-    # Add natural sky background (~0.171 mcd/m² for 21.6 mag/arcsec²)
+    # Add natural sky background (~0.100 mcd/m² for 22.0 mag/arcsec²)
     natural_mcd = REFERENCE_MCD * 10 ** (-0.4 * NATURAL_SKY_BRIGHTNESS)
     total_mcd = artificial_mcd + natural_mcd
 

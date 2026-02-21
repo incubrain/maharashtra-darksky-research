@@ -185,10 +185,10 @@ class TestSkyBrightnessCalibration:
 
         Citation: Falchi, F. et al. (2016). The new world atlas of
         artificial night sky brightness. Science Advances, 2(6), e1600377.
-        Section 2.1: "The natural sky background at zenith in a
-        moonless, cloudless night is approximately 21.6 mag/arcsec²."
+        Table S1: natural sky background at zenith is 174 µcd/m²
+        ≈ 22.0 mag/arcsec².
         """
-        assert NATURAL_SKY_BRIGHTNESS == 21.6
+        assert NATURAL_SKY_BRIGHTNESS == 22.0
 
     def test_radiance_to_mcd_conversion_matches_falchi(self):
         """Conversion factor 0.177 mcd/m² per nW/cm²/sr.
@@ -204,12 +204,11 @@ class TestSkyBrightnessCalibration:
         Citation: Falchi et al. (2016), Section 3.2.
         This is the standard calibration point for VIIRS DNB.
         """
-        # Convert 1.22 nW to mcd, then to mag
-        mcd = 1.22 * RADIANCE_TO_MCD
-        mag = NATURAL_SKY_BRIGHTNESS - 2.5 * np.log10(1 + mcd / (REFERENCE_MCD * 1e-3))
-        # Due to simplified conversion, just check it's in the right ballpark
+        from src.analysis.sky_brightness_model import radiance_to_sky_brightness
+
+        mag = radiance_to_sky_brightness(1.22)
         # The exact conversion depends on spectral response; 20.9 ± 0.5 is reasonable
-        assert 20.0 < mag < 22.0
+        assert 20.0 < float(mag) < 22.0
 
 
 # ── Bortle Scale Boundaries ──────────────────────────────────────────

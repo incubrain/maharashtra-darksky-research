@@ -156,7 +156,7 @@ def generate_city_maps(base_dir, shapefile_path):
     error_tb = None
     with StepTimer() as timer:
         try:
-            yearly_path = os.path.join(csv_dir, "site_yearly_radiance.csv")
+            yearly_path = os.path.join(csv_dir, "city_yearly_radiance.csv")
             if not os.path.exists(yearly_path):
                 return StepResult(
                     step_name="generate_city_maps",
@@ -168,7 +168,6 @@ def generate_city_maps(base_dir, shapefile_path):
             yearly_df = pd.read_csv(yearly_path)
             district_gdf = gpd.read_file(shapefile_path)
 
-            # Site overlay and comparison maps
             from src.site.site_analysis import (
                 build_site_geodataframe,
                 generate_site_maps,

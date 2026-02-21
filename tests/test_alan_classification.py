@@ -5,6 +5,7 @@ Verifies that:
 1. Low/medium/high thresholds are applied correctly
 2. Edge cases at threshold boundaries work
 3. NaN values are handled
+4. Scalar and series classification produce consistent results
 """
 
 import numpy as np
@@ -12,49 +13,38 @@ import pandas as pd
 import pytest
 
 from src import config
+from src.formulas.classification import classify_alan, classify_alan_series
 
 
 class TestALANThresholdClassification:
-    """Test the threshold classification used in viirs_process.run_full_pipeline."""
-
-    @staticmethod
-    def classify(median_radiance):
-        """Replicates the classification logic from viirs_process.py lines 582-589."""
-        if pd.isna(median_radiance):
-            return "unknown"
-        elif median_radiance < config.ALAN_LOW_THRESHOLD:
-            return "low"
-        elif median_radiance < config.ALAN_MEDIUM_THRESHOLD:
-            return "medium"
-        else:
-            return "high"
+    """Test the threshold classification using the actual production function."""
 
     def test_low_threshold(self):
-        assert self.classify(0.5) == "low"
-        assert self.classify(0.0) == "low"
-        assert self.classify(0.99) == "low"
+        assert classify_alan(0.5) == "low"
+        assert classify_alan(0.0) == "low"
+        assert classify_alan(0.99) == "low"
 
     def test_medium_threshold(self):
-        assert self.classify(1.0) == "medium"
-        assert self.classify(3.0) == "medium"
-        assert self.classify(4.99) == "medium"
+        assert classify_alan(1.0) == "medium"
+        assert classify_alan(3.0) == "medium"
+        assert classify_alan(4.99) == "medium"
 
     def test_high_threshold(self):
-        assert self.classify(5.0) == "high"
-        assert self.classify(50.0) == "high"
-        assert self.classify(100.0) == "high"
+        assert classify_alan(5.0) == "high"
+        assert classify_alan(50.0) == "high"
+        assert classify_alan(100.0) == "high"
 
     def test_boundary_low_medium(self):
         """Exactly at ALAN_LOW_THRESHOLD (1.0) should be medium, not low."""
-        assert self.classify(config.ALAN_LOW_THRESHOLD) == "medium"
+        assert classify_alan(config.ALAN_LOW_THRESHOLD) == "medium"
 
     def test_boundary_medium_high(self):
         """Exactly at ALAN_MEDIUM_THRESHOLD (5.0) should be high, not medium."""
-        assert self.classify(config.ALAN_MEDIUM_THRESHOLD) == "high"
+        assert classify_alan(config.ALAN_MEDIUM_THRESHOLD) == "high"
 
     def test_nan_returns_unknown(self):
-        assert self.classify(np.nan) == "unknown"
-        assert self.classify(None) == "unknown"
+        assert classify_alan(np.nan) == "unknown"
+        assert classify_alan(None) == "unknown"
 
     def test_config_thresholds_are_correct(self):
         """Verify expected config values haven't been accidentally changed."""
@@ -63,22 +53,12 @@ class TestALANThresholdClassification:
 
 
 class TestSiteALANClassification:
-    """Test the pd.cut-based classification used in site_analysis.py."""
-
-    @staticmethod
-    def classify_series(radiance_values):
-        """Replicates the pd.cut classification from site_analysis.py line 180."""
-        return pd.cut(
-            pd.Series(radiance_values),
-            bins=[-np.inf, config.ALAN_LOW_THRESHOLD, config.ALAN_MEDIUM_THRESHOLD, np.inf],
-            labels=["low", "medium", "high"],
-            right=False,
-        )
+    """Test the series-based classification using the actual production function."""
 
     def test_site_classification_values(self):
-        """pd.cut with right=False uses [low, high) intervals matching the manual method."""
+        """classify_alan_series uses [low, high) intervals matching the scalar method."""
         values = [0.5, 1.0, 3.0, 5.0, 10.0]
-        result = self.classify_series(values)
+        result = classify_alan_series(pd.Series(values))
 
         assert result.iloc[0] == "low"     # 0.5 in [-inf, 1.0)
         assert result.iloc[1] == "medium"  # 1.0 in [1.0, 5.0)
@@ -86,14 +66,12 @@ class TestSiteALANClassification:
         assert result.iloc[3] == "high"    # 5.0 in [5.0, inf)
         assert result.iloc[4] == "high"    # 10.0 in [5.0, inf)
 
-    def test_boundary_consistency_with_district_method(self):
-        """Site (pd.cut) and district (if/elif) should now agree at all boundaries."""
-        from tests.test_alan_classification import TestALANThresholdClassification
-
+    def test_boundary_consistency_with_scalar_method(self):
+        """Series (classify_alan_series) and scalar (classify_alan) should agree at all boundaries."""
         for value in [1.0, 5.0, 0.5, 3.0, 10.0]:
-            district_result = TestALANThresholdClassification.classify(value)
-            site_result = self.classify_series([value]).iloc[0]
-            assert district_result == site_result, (
-                f"At {value} nW: district says '{district_result}', "
-                f"site says '{site_result}'"
+            scalar_result = classify_alan(value)
+            series_result = classify_alan_series(pd.Series([value])).iloc[0]
+            assert scalar_result == series_result, (
+                f"At {value} nW: scalar says '{scalar_result}', "
+                f"series says '{series_result}'"
             )

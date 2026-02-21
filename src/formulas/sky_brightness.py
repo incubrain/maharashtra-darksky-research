@@ -8,9 +8,10 @@ night sky brightness. Science Advances, 2(6), e1600377.
 import numpy as np
 
 # Natural sky background brightness in mag/arcsec².
-# Falchi et al. (2016): "The natural sky background at zenith in a
-# moonless, cloudless night is approximately 21.6 mag/arcsec²."
-NATURAL_SKY_BRIGHTNESS = 21.6
+# Falchi et al. (2016), Table S1: the zenith natural sky background in
+# a moonless, cloudless night is 174 µcd/m² ≈ 22.0 mag/arcsec².
+# This sets the physical floor — zero artificial light yields Bortle 1.
+NATURAL_SKY_BRIGHTNESS = 22.0
 
 # Empirical conversion factor: nW/cm²/sr → mcd/m².
 # Falchi et al. (2016), Table S1.

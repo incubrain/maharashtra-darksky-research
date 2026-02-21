@@ -68,27 +68,27 @@ def extract_radial_profiles(raster_path, city_locations, year=None, radii_km=Non
                 [{"geometry": annulus}], crs=f"EPSG:{config.MAHARASHTRA_UTM_EPSG}"
             ).to_crs("EPSG:4326")
 
-        # Prepare corrected raster
-        with rasterio.open(raster_path) as src:
-            data = src.read(1)
-            meta = src.meta.copy()
-            # Apply DBS
-            data_corrected = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
+            # Prepare corrected raster
+            with rasterio.open(raster_path) as src:
+                data = src.read(1)
+                meta = src.meta.copy()
+                # Apply DBS
+                data_corrected = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
 
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix="_gradient_corr.tif")
-        os.close(tmp_fd)
-        try:
-            with rasterio.open(tmp_path, "w", **meta) as dst:
-                dst.write(data_corrected, 1)
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix="_gradient_corr.tif")
+            os.close(tmp_fd)
+            try:
+                with rasterio.open(tmp_path, "w", **meta) as dst:
+                    dst.write(data_corrected, 1)
 
-            stats = zonal_stats(
-                annulus_gdf, tmp_path,
-                stats=["mean", "median", "count", "std"],
-                nodata=np.nan, all_touched=True,
-            )
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
+                stats = zonal_stats(
+                    annulus_gdf, tmp_path,
+                    stats=["mean", "median", "count", "std"],
+                    nodata=np.nan, all_touched=True,
+                )
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
 
             if stats and stats[0]["count"] and stats[0]["count"] > 0:
                 results.append({

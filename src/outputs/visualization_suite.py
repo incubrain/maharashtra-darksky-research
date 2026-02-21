@@ -47,8 +47,9 @@ def create_multi_year_comparison_grid(yearly_df, gdf, output_path,
     for i in range(n, len(axes_flat)):
         axes_flat[i].set_visible(False)
 
-    # Consistent color scale
-    vmin = yearly_df["median_radiance"].quantile(0.01)
+    # Log-scale color mapping for better visibility across dynamic range
+    from matplotlib.colors import LogNorm
+    vmin = max(yearly_df["median_radiance"].quantile(0.01), 0.1)
     vmax = yearly_df["median_radiance"].quantile(0.99)
 
     for i, year in enumerate(years):
@@ -56,14 +57,15 @@ def create_multi_year_comparison_grid(yearly_df, gdf, output_path,
         year_data = yearly_df[yearly_df["year"] == year]
         merged = gdf.merge(year_data[["district", "median_radiance"]], on="district", how="left")
         merged.plot(column="median_radiance", ax=ax, cmap="YlOrRd",
-                    vmin=vmin, vmax=vmax, edgecolor="black", linewidth=0.3,
+                    norm=LogNorm(vmin=vmin, vmax=vmax),
+                    edgecolor="black", linewidth=0.3,
                     missing_kwds={"color": "lightgrey"})
         ax.set_title(str(year), fontsize=13, fontweight="bold")
         ax.set_axis_off()
 
-    fig.suptitle("Maharashtra: Median Radiance Evolution", fontsize=16, y=0.98)
+    fig.suptitle("Maharashtra: Median Radiance Evolution (log scale)", fontsize=16, y=0.98)
     fig.colorbar(axes_flat[n - 1].collections[0], ax=axes_flat[:n], shrink=0.6,
-                 label="Median Radiance (nW/cm²/sr)")
+                 label="Median Radiance (nW/cm²/sr, log scale)")
     plt.tight_layout()
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -73,30 +75,63 @@ def create_multi_year_comparison_grid(yearly_df, gdf, output_path,
 
 
 def create_growth_classification_map(trends_df, gdf, output_path):
-    """Choropleth: districts classified by growth rate."""
+    """Choropleth: districts classified by growth rate.
+
+    Uses adaptive thresholds based on the data distribution (quartiles)
+    so that the map always shows meaningful variation across districts.
+    """
     merged = gdf.merge(trends_df, on="district", how="left")
 
-    def classify_growth(pct):
-        if pd.isna(pct):
-            return "No data"
-        elif pct < 0:
-            return "Declining (<0%)"
-        elif pct < 0.5:
-            return "Slow (0-0.5%)"
-        elif pct < 2:
-            return "Moderate (0.5-2%)"
-        else:
-            return "Rapid (>2%)"
+    # Compute adaptive thresholds from actual data distribution
+    valid_pcts = merged["annual_pct_change"].dropna()
+    if len(valid_pcts) > 0 and valid_pcts.min() >= 0:
+        # All-positive growth: use quartile-based adaptive bins
+        q25 = valid_pcts.quantile(0.25)
+        q50 = valid_pcts.quantile(0.50)
+        q75 = valid_pcts.quantile(0.75)
+
+        def classify_growth(pct):
+            if pd.isna(pct):
+                return "No data"
+            elif pct < q25:
+                return f"Low (<{q25:.1f}%)"
+            elif pct < q50:
+                return f"Moderate ({q25:.1f}-{q50:.1f}%)"
+            elif pct < q75:
+                return f"High ({q50:.1f}-{q75:.1f}%)"
+            else:
+                return f"Rapid (>{q75:.1f}%)"
+
+        color_map = {
+            f"Low (<{q25:.1f}%)": "#ffffb2",
+            f"Moderate ({q25:.1f}-{q50:.1f}%)": "#fecc5c",
+            f"High ({q50:.1f}-{q75:.1f}%)": "#fd8d3c",
+            f"Rapid (>{q75:.1f}%)": "#e31a1c",
+            "No data": "#d3d3d3",
+        }
+    else:
+        # Mixed positive/negative: use fixed threshold scheme
+        def classify_growth(pct):
+            if pd.isna(pct):
+                return "No data"
+            elif pct < 0:
+                return "Declining (<0%)"
+            elif pct < 2:
+                return "Slow (0-2%)"
+            elif pct < 5:
+                return "Moderate (2-5%)"
+            else:
+                return "Rapid (>5%)"
+
+        color_map = {
+            "Declining (<0%)": "#2166ac",
+            "Slow (0-2%)": "#ffffb2",
+            "Moderate (2-5%)": "#fd8d3c",
+            "Rapid (>5%)": "#e31a1c",
+            "No data": "#d3d3d3",
+        }
 
     merged["growth_class"] = merged["annual_pct_change"].apply(classify_growth)
-
-    color_map = {
-        "Declining (<0%)": "#2166ac",
-        "Slow (0-0.5%)": "#fdbf6f",
-        "Moderate (0.5-2%)": "#f46d43",
-        "Rapid (>2%)": "#a50026",
-        "No data": "#d3d3d3",
-    }
 
     fig, ax = plt.subplots(figsize=(12, 10))
     for cls, color in color_map.items():
@@ -176,40 +211,3 @@ def create_enhanced_radiance_heatmap(yearly_df, output_path):
     log.info("Saved: %s", output_path)
 
 
-def create_city_vs_site_boxplot(metrics_df, output_path):
-    """Side-by-side boxplots comparing cities vs. dark-sky sites.
-
-    Skips generation if only one type is present (the comparison needs both).
-    """
-    if "type" not in metrics_df.columns:
-        log.warning("No 'type' column in metrics_df for boxplot")
-        return
-
-    present_types = metrics_df["type"].unique()
-    if not {"city", "site"}.issubset(set(present_types)):
-        log.info("Skipping city_vs_site_boxplot — need both types, have: %s", list(present_types))
-        return
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    types = ["city", "site"]
-    data = [metrics_df[metrics_df["type"] == t]["median_radiance"].dropna().values
-            for t in types]
-    bp = ax.boxplot(data, labels=["Cities", "Dark-Sky Sites"], patch_artist=True)
-    bp["boxes"][0].set_facecolor("crimson")
-    bp["boxes"][0].set_alpha(0.5)
-    bp["boxes"][1].set_facecolor("forestgreen")
-    bp["boxes"][1].set_alpha(0.5)
-
-    ax.set_yscale("log")
-    ax.axhline(y=config.ALAN_LOW_THRESHOLD, color="orange", linestyle="--",
-               linewidth=1, label=f"Low-ALAN threshold ({config.ALAN_LOW_THRESHOLD} nW)")
-    ax.set_ylabel("Median Radiance (nW/cm²/sr, log scale)", fontsize=12)
-    ax.set_title("ALAN Distribution: Cities vs. Dark-Sky Sites", fontsize=14)
-    ax.legend(fontsize=9)
-    ax.grid(axis="y", alpha=0.3)
-    plt.tight_layout()
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    fig.savefig(output_path, dpi=config.MAP_DPI, bbox_inches="tight")
-    plt.close(fig)
-    log.info("Saved: %s", output_path)

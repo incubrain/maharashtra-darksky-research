@@ -3,7 +3,7 @@ Tests for sky brightness conversion (radiance → mag/arcsec² → Bortle scale)
 
 Verifies that:
 1. Known radiance values produce expected sky brightness
-2. Zero radiance returns natural sky background (~21.6 mag)
+2. Zero radiance returns natural sky background (~22.0 mag)
 3. Higher radiance = lower mag (brighter sky)
 4. Bortle classification boundaries are correct
 5. The conversion is monotonic
@@ -88,9 +88,9 @@ class TestRadianceToSkyBrightness:
         mag_city = radiance_to_sky_brightness(50.0)
 
         # Zero radiance → natural sky
-        assert mag_zero == pytest.approx(21.6, abs=0.1)
+        assert mag_zero == pytest.approx(22.0, abs=0.1)
         # Low radiance → still relatively dark (rural sky)
-        assert 20.5 < mag_low < 21.6
+        assert 20.5 < mag_low < 22.0
         # ~1.2 nW → suburban transition (World Atlas/SQM calibration point)
         assert mag_mid == pytest.approx(20.9, abs=0.3)
         # City → bright sky, Bortle 8+
@@ -101,8 +101,10 @@ class TestClassifyBortle:
 
     def test_dark_site_bortle_1_or_2(self):
         """mag > 21.5 should classify as Bortle 1 or 2."""
+        bortle, desc = classify_bortle(21.8)
+        assert bortle == 1, f"21.8 mag should be Bortle 1, got {bortle}"
         bortle, desc = classify_bortle(21.6)
-        assert bortle in (1, 2), f"21.6 mag should be Bortle 1-2, got {bortle}"
+        assert bortle == 2, f"21.6 mag should be Bortle 2, got {bortle}"
 
     def test_city_bortle_8_or_9(self):
         """mag < 18.0 should classify as Bortle 8 or 9."""
@@ -136,18 +138,18 @@ class TestEndToEnd:
 
     def test_radiance_to_bortle_pipeline(self):
         """Full pipeline: radiance → mag → Bortle should work end-to-end."""
-        # Zero radiance → natural sky → Bortle 1-2
+        # Zero radiance → natural sky (22.0 mag) → Bortle 1
         mag_zero = radiance_to_sky_brightness(0.0)
         bortle_zero, _ = classify_bortle(mag_zero)
-        assert bortle_zero <= 2, (
-            f"Zero radiance should be Bortle ≤2, got {bortle_zero} (mag={mag_zero:.2f})"
+        assert bortle_zero == 1, (
+            f"Zero radiance should be Bortle 1, got {bortle_zero} (mag={mag_zero:.2f})"
         )
 
-        # Dark site (0.5 nW) → rural sky, Bortle 3-4
+        # Dark site (0.5 nW) → very dark sky, Bortle 2-3
         mag_dark = radiance_to_sky_brightness(0.5)
         bortle_dark, _ = classify_bortle(mag_dark)
-        assert 3 <= bortle_dark <= 5, (
-            f"0.5 nW should be Bortle 3-5, got {bortle_dark} (mag={mag_dark:.2f})"
+        assert 2 <= bortle_dark <= 4, (
+            f"0.5 nW should be Bortle 2-4, got {bortle_dark} (mag={mag_dark:.2f})"
         )
 
         # City radiance (50 nW) → Bortle 8+

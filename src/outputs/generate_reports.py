@@ -124,7 +124,7 @@ def generate_city_reports(base_dir):
     error_tb = None
     with StepTimer() as timer:
         try:
-            yearly_path = os.path.join(csv_dir, "site_yearly_radiance.csv")
+            yearly_path = os.path.join(csv_dir, "city_yearly_radiance.csv")
             if not os.path.exists(yearly_path):
                 return StepResult(
                     step_name="generate_city_reports",

@@ -19,7 +19,7 @@ from src.logging_config import StepTimer, get_pipeline_logger, log_step_summary
 log = get_pipeline_logger(__name__)
 
 
-def step_build_site_buffers(buffer_km: float, entity_type: str = "all") -> tuple[StepResult, gpd.GeoDataFrame | None]:
+def step_build_site_buffers(buffer_km: float, entity_type: str = "all", city_source: str = "config") -> tuple[StepResult, gpd.GeoDataFrame | None]:
     """Build circular buffers around site/city locations."""
     from src.site.site_analysis import build_site_geodataframe
 
@@ -28,7 +28,7 @@ def step_build_site_buffers(buffer_km: float, entity_type: str = "all") -> tuple
 
     with StepTimer() as timer:
         try:
-            gdf_sites = build_site_geodataframe(buffer_km, entity_type)
+            gdf_sites = build_site_geodataframe(buffer_km, entity_type, city_source=city_source)
         except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
             error_tb = traceback.format_exc()
             log.error("build_site_buffers failed: %s", exc, exc_info=True)
@@ -118,6 +118,15 @@ def step_compute_yearly_metrics(
     ), yearly_df
 
 
+def _entity_prefix(yearly_df: pd.DataFrame) -> str:
+    """Determine file prefix from entity type in data ('city' or 'site')."""
+    if "type" in yearly_df.columns:
+        types = yearly_df["type"].unique()
+        if len(types) == 1:
+            return types[0]
+    return "site"
+
+
 def step_save_site_yearly(yearly_df: pd.DataFrame, csv_dir: str) -> tuple[StepResult, str]:
     """Save site yearly radiance data to CSV."""
     result_path = None
@@ -126,7 +135,8 @@ def step_save_site_yearly(yearly_df: pd.DataFrame, csv_dir: str) -> tuple[StepRe
     with StepTimer() as timer:
         try:
             os.makedirs(csv_dir, exist_ok=True)
-            result_path = os.path.join(csv_dir, "site_yearly_radiance.csv")
+            prefix = _entity_prefix(yearly_df)
+            result_path = os.path.join(csv_dir, f"{prefix}_yearly_radiance.csv")
             yearly_df.to_csv(result_path, index=False)
             log.info("Saved: %s", result_path)
 
@@ -179,38 +189,18 @@ def step_fit_site_trends(yearly_df: pd.DataFrame, csv_dir: str) -> tuple[StepRes
 
             # Save to CSV
             os.makedirs(csv_dir, exist_ok=True)
-            trends_path = os.path.join(csv_dir, "site_trends.csv")
+            prefix = _entity_prefix(yearly_df)
+            trends_path = os.path.join(csv_dir, f"{prefix}_trends.csv")
             trends_df.to_csv(trends_path, index=False)
             log.info("Saved: %s", trends_path)
 
             # Print summary
             log.info("\n" + "=" * 70)
-            log.info("SITE TREND SUMMARY")
+            log.info("%s TREND SUMMARY", prefix.upper())
             log.info("=" * 70)
 
-            cities_t = trends_df[trends_df["type"] == "city"].sort_values(
-                "annual_pct_change", ascending=False
-            )
-            sites_t = trends_df[trends_df["type"] == "site"].sort_values(
-                "annual_pct_change", ascending=False
-            )
-
-            log.info("\n--- CITIES ---")
-            for _, r in cities_t.iterrows():
-                log.info(
-                    "  %-20s %+6.2f%% [%+.2f, %+.2f]  R²=%.3f  p=%.1e  latest=%.2f nW  [%s]",
-                    r["name"],
-                    r["annual_pct_change"],
-                    r["ci_low"],
-                    r["ci_high"],
-                    r["r_squared"],
-                    r["p_value"],
-                    r["median_radiance_latest"],
-                    r["alan_class"],
-                )
-
-            log.info("\n--- DARK-SKY SITES ---")
-            for _, r in sites_t.iterrows():
+            sorted_trends = trends_df.sort_values("annual_pct_change", ascending=False)
+            for _, r in sorted_trends.iterrows():
                 log.info(
                     "  %-30s %+6.2f%% [%+.2f, %+.2f]  R²=%.3f  p=%.1e  latest=%.2f nW  [%s]",
                     r["name"],
@@ -223,21 +213,20 @@ def step_fit_site_trends(yearly_df: pd.DataFrame, csv_dir: str) -> tuple[StepRes
                     r["alan_class"],
                 )
 
-            city_avg = cities_t["annual_pct_change"].mean()
-            site_avg = sites_t["annual_pct_change"].mean()
-            log.info("\nCities avg growth: %+.2f%%/yr", city_avg)
-            log.info("Sites avg growth:  %+.2f%%/yr", site_avg)
+            avg_growth = sorted_trends["annual_pct_change"].mean()
+            log.info("\nAvg growth: %+.2f%%/yr", avg_growth)
 
-            low_alan = sites_t[sites_t["alan_class"] == "low"]
-            latest_year = yearly_df["year"].max()
-            log.info(
-                "\nDark-sky viable (median < 1 nW in %d): %d of %d sites",
-                latest_year,
-                len(low_alan),
-                len(sites_t),
-            )
-            if len(low_alan) > 0:
-                log.info("  %s", ", ".join(low_alan["name"].tolist()))
+            if prefix == "site":
+                low_alan = sorted_trends[sorted_trends["alan_class"] == "low"]
+                latest_year = yearly_df["year"].max()
+                log.info(
+                    "\nDark-sky viable (median < 1 nW in %d): %d of %d sites",
+                    latest_year,
+                    len(low_alan),
+                    len(sorted_trends),
+                )
+                if len(low_alan) > 0:
+                    log.info("  %s", ", ".join(low_alan["name"].tolist()))
 
         except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
             error_tb = traceback.format_exc()
@@ -349,11 +338,11 @@ def step_spatial_analysis(
                 buffer_comparison = compare_inside_outside_buffers(
                     site_gdf=gdf_sites,
                     raster_path=median_path,
-                    output_csv=os.path.join(csv_dir, f"site_buffer_comparison_{latest_year}.csv"),
+                    output_csv=os.path.join(csv_dir, f"buffer_comparison_{latest_year}.csv"),
                 )
                 plot_inside_outside_comparison(
                     buffer_comparison,
-                    output_path=os.path.join(maps_dir, "site_buffer_comparison.png"),
+                    output_path=os.path.join(maps_dir, "buffer_comparison.png"),
                 )
                 spatial_results["buffer_comparison"] = buffer_comparison
 
@@ -370,7 +359,7 @@ def step_spatial_analysis(
 
             # Proximity analysis
             proximity = compute_nearest_city_distances(
-                output_csv=os.path.join(csv_dir, "site_proximity_metrics.csv"),
+                output_csv=os.path.join(csv_dir, "proximity_metrics.csv"),
             )
             spatial_results["proximity"] = proximity
 
@@ -463,15 +452,16 @@ def step_site_stability(
             os.makedirs(csv_dir, exist_ok=True)
             os.makedirs(diagnostics_dir, exist_ok=True)
 
+            prefix = _entity_prefix(yearly_df)
             site_stability = compute_stability_metrics(
                 yearly_df,
                 entity_col="name",
-                output_csv=os.path.join(csv_dir, "site_stability_metrics.csv"),
+                output_csv=os.path.join(csv_dir, f"{prefix}_stability_metrics.csv"),
             )
             plot_stability_scatter(
                 site_stability,
                 entity_col="name",
-                output_path=os.path.join(diagnostics_dir, "site_stability_scatter.png"),
+                output_path=os.path.join(diagnostics_dir, f"{prefix}_stability_scatter.png"),
             )
 
         except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
@@ -513,10 +503,11 @@ def step_site_breakpoints(
         try:
             os.makedirs(csv_dir, exist_ok=True)
 
+            prefix = _entity_prefix(yearly_df)
             site_breakpoints = analyze_all_breakpoints(
                 yearly_df,
                 entity_col="name",
-                output_csv=os.path.join(csv_dir, "site_breakpoints.csv"),
+                output_csv=os.path.join(csv_dir, f"{prefix}_breakpoints.csv"),
             )
 
         except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
@@ -555,9 +546,10 @@ def step_site_benchmark(trends_df: pd.DataFrame, csv_dir: str) -> tuple[StepResu
         try:
             os.makedirs(csv_dir, exist_ok=True)
 
+            prefix = _entity_prefix(trends_df)
             compare_to_benchmarks(
                 trends_df,
-                output_csv=os.path.join(csv_dir, "site_benchmark_comparison.csv"),
+                output_csv=os.path.join(csv_dir, f"{prefix}_benchmark_comparison.csv"),
             )
 
         except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
@@ -581,49 +573,6 @@ def step_site_benchmark(trends_df: pd.DataFrame, csv_dir: str) -> tuple[StepResu
         step_name="site_benchmark",
         status="success",
         input_summary={"trends_count": len(trends_df)},
-        output_summary={},
-        timing_seconds=timer.elapsed,
-    ), None
-
-
-def step_site_visualizations(
-    latest_metrics: pd.DataFrame, maps_dir: str
-) -> tuple[StepResult, None]:
-    """Generate city vs site boxplot visualization."""
-    from src.outputs.visualization_suite import create_city_vs_site_boxplot
-
-    error_tb = None
-
-    with StepTimer() as timer:
-        try:
-            os.makedirs(maps_dir, exist_ok=True)
-
-            create_city_vs_site_boxplot(
-                latest_metrics,
-                output_path=os.path.join(maps_dir, "city_vs_site_boxplot.png"),
-            )
-
-        except (FileNotFoundError, ValueError, KeyError, pd.errors.EmptyDataError) as exc:
-            error_tb = traceback.format_exc()
-            log.error("site_visualizations failed: %s", exc, exc_info=True)
-        except Exception:
-            error_tb = traceback.format_exc()
-            log.error("site_visualizations failed unexpectedly", exc_info=True)
-
-    if error_tb:
-        log_step_summary(log, "site_visualizations", "error", timing_seconds=timer.elapsed)
-        return StepResult(
-            step_name="site_visualizations",
-            status="error",
-            error=error_tb,
-            timing_seconds=timer.elapsed,
-        ), None
-
-    log_step_summary(log, "site_visualizations", "success", input_summary={"sites": len(latest_metrics)}, output_summary={}, timing_seconds=timer.elapsed)
-    return StepResult(
-        step_name="site_visualizations",
-        status="success",
-        input_summary={"sites": len(latest_metrics)},
         output_summary={},
         timing_seconds=timer.elapsed,
     ), None
