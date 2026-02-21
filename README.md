@@ -35,7 +35,7 @@ Analysis of Artificial Light at Night (ALAN) trends across Maharashtra districts
 ```bash
 # 1. Clone the repository
 git clone <repo-url>
-cd maharashtra-viirs
+cd maharashtra-darksky-research
 
 # 2. Create virtual environment and install dependencies
 python3 -m venv viirs_env
@@ -173,7 +173,7 @@ Sweeps the cloud-free coverage threshold parameter to test result robustness.
 
 ## Quick Start (Full Pipeline with Synthetic Data)
 
-All commands must be run from the project root (`maharashtra-viirs/`) because modules use `from src import config`.
+All commands must be run from the project root (`maharashtra-darksky-research/`) because modules use `from src import config`.
 
 ```bash
 # Install

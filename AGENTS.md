@@ -5,7 +5,7 @@ This file contains technical reference information for agents and developers wor
 ## Repository Structure
 
 ```
-maharashtra-viirs/
+maharashtra-darksky-research/
 ├── README.md
 ├── AGENTS.md                          # This file
 ├── requirements.txt

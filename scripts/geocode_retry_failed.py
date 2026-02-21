@@ -34,7 +34,7 @@ MAHARASHTRA_BBOX = config.MAHARASHTRA_BBOX
 DATA_DIR = "data/census"
 GEOCODED_PATH = os.path.join(DATA_DIR, "census_towns_geocoded.csv")
 
-USER_AGENT = "maharashtra-viirs-alan-research/1.0"
+USER_AGENT = "maharashtra-darksky-research/1.0"
 RATE_LIMIT_SECONDS = 1.1
 
 
