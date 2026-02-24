@@ -1,0 +1,7 @@
+name,category,district,area_sq_km,establishment_year,responsible_department,lat,lon,geocode_status
+Tadoba National Park,national_park,Chandrapur,116.55,1955,Maharashtra Forest Department,20.267028,79.494519,ok
+Pench National Park,national_park,Nagpur,257.26,1975,Maharashtra Forest Department,21.695055,79.24877,ok
+Nawegaon National Park,national_park,Gondia,133.88,1975,Maharashtra Forest Department,20.960508,80.19347,fallback
+Gugamal National Park,national_park,Amravati,361.28,1987,Maharashtra Forest Department,21.37644,77.024481,ok
+Chandoli National Park,national_park,"Satara, Kolhapur, Sangli",317.67,2004,Maharashtra Forest Department (Sahyadri Tiger Reserve),17.188582,73.786853,ok
+Sanjay Gandhi National Park,national_park,Mumbai,86.96,1983,Maharashtra Forest Department,19.25,72.95,provided

@@ -1,0 +1,18 @@
+name,category,district,area_sq_km,establishment_year,responsible_department,lat,lon,geocode_status
+Alaldari Conservation Reserve,conservation_reserve,Dhule,100.56,2022,Maharashtra Forest Department,20.990,74.315,manual
+Amboli-Dodamarg Conservation Reserve,conservation_reserve,Sindhudurg,56.92,2021,Maharashtra Forest Department,15.963,73.998,manual
+Anjneri Conservation Reserve,conservation_reserve,Nashik,5.69,2017,Maharashtra Forest Department,19.920,73.570,manual
+Atpadi Conservation Reserve,conservation_reserve,Sangli,9.49,2023,Maharashtra Forest Department,17.422677,74.939122,fallback
+Bhor Conservation Reserve,conservation_reserve,Pune,28.44,2022,Maharashtra Forest Department,18.212761,73.816366,fallback
+Bhorgad Conservation Reserve,conservation_reserve,Nashik,3.49,2008,Maharashtra Forest Department,20.119658,73.737823,fallback
+Chandgad Conservation Reserve,conservation_reserve,Kolhapur,225.24,2021,Maharashtra Forest Department,15.90143,74.240562,fallback
+Chivatibari Conservation Reserve,conservation_reserve,Dhule,66.04,2022,Maharashtra Forest Department,21.000,74.300,manual
+Dare Khurd (Mahadare) Conservation Reserve,conservation_reserve,Satara,1.07,2022,Maharashtra Forest Department,17.790,73.988,manual
+Igatpuri Conservation Reserve,conservation_reserve,Nashik,88.49,2022,Maharashtra Forest Department,19.694439,73.563888,fallback
+Jor-Jambhali Conservation Reserve,conservation_reserve,Satara,65.11,2021,Maharashtra Forest Department,17.950,73.890,manual
+Kolamarka Conservation Reserve,conservation_reserve,Gadchiroli,180.72,2013,Maharashtra Forest Department,19.395,80.100,manual
+Mamdapur Conservation Reserve,conservation_reserve,Gadchiroli,93.42,2016,Maharashtra Forest Department,19.850,80.200,manual
+Panhalgad Conservation Reserve,conservation_reserve,Satara,72.9,2021,Maharashtra Forest Department,17.680,73.980,manual
+Tillari Conservation Reserve,conservation_reserve,Sindhudurg,29.53,2020,Maharashtra Forest Department,15.761,74.091,manual
+Toranmal Conservation Reserve,conservation_reserve,Nandurbar,54.46,2014,Maharashtra Forest Department,21.881173,74.4634,fallback
+Vishalgad Conservation Reserve,conservation_reserve,Kolhapur,92.96,2021,Maharashtra Forest Department,16.906276,73.743839,fallback

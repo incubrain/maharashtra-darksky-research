@@ -1,0 +1,51 @@
+name,category,district,area_sq_km,establishment_year,responsible_department,lat,lon,geocode_status
+Amba Barwa Wildlife Sanctuary,wildlife_sanctuary,Buldhana,127.11,1997,Maharashtra Forest Department,21.226587,76.68881,fallback
+Andhari Wildlife Sanctuary,wildlife_sanctuary,Chandrapur,509.27,1986,Maharashtra Forest Department,19.821672,79.674442,fallback
+Aner Dam Wildlife Sanctuary,wildlife_sanctuary,Dhule,82.94,1986,Maharashtra Forest Department,21.309946,75.131185,fallback
+Bhamragarh Wildlife Sanctuary,wildlife_sanctuary,Gadchiroli,104.38,1997,Maharashtra Forest Department,19.546445,80.741411,fallback
+Bhimashankar Wildlife Sanctuary,wildlife_sanctuary,"Pune, Raigad, Thane",130.78,1985,Maharashtra Forest Department,19.085845,73.557142,ok
+Bor Wildlife Sanctuary,wildlife_sanctuary,"Nagpur, Wardha",61.1,1970,Maharashtra Forest Department,21.069563,78.684682,fallback
+Chaprala Wildlife Sanctuary,wildlife_sanctuary,Gadchiroli,134.78,1986,Maharashtra Forest Department,19.619467,79.847867,fallback
+Deolgaon-Rehkuri Wildlife Sanctuary,wildlife_sanctuary,Ahmednagar,2.17,1980,Maharashtra Forest Department,18.59862,74.970796,fallback
+Dnyanganga Wildlife Sanctuary,wildlife_sanctuary,Buldhana,205.21,1997,Maharashtra Forest Department,20.859766,76.493536,fallback
+Gautala Wildlife Sanctuary,wildlife_sanctuary,"Aurangabad, Jalgaon",260.61,1986,Maharashtra Forest Department,20.345,75.085,manual
+Ghodazari Wildlife Sanctuary,wildlife_sanctuary,Chandrapur,153.31,2018,Maharashtra Forest Department,20.546169,79.602277,fallback
+Great Indian Bustard Sanctuary,wildlife_sanctuary,"Ahmednagar, Solapur",366.73,1979,Maharashtra Forest Department,17.642,75.925,manual
+Isapur Wildlife Sanctuary,wildlife_sanctuary,Yavatmal,37.8,2014,Maharashtra Forest Department,20.0884,77.694111,fallback
+Jayakwadi Bird Sanctuary,wildlife_sanctuary,"Ahmednagar, Aurangabad",341.05,1986,Maharashtra Forest Department,19.485,75.369,manual
+Kalsubai Harishchandragad Wildlife Sanctuary,wildlife_sanctuary,Ahmednagar,361.71,1986,Maharashtra Forest Department,19.469101,73.743276,ok
+Kanhargaon Wildlife Sanctuary,wildlife_sanctuary,Chandrapur,269.4,2021,Maharashtra Forest Department,19.673,79.676,manual
+Karanja Sohol Wildlife Sanctuary,wildlife_sanctuary,Akola,18.32,2000,Maharashtra Forest Department,20.429,77.506,manual
+Karnala Bird Sanctuary,wildlife_sanctuary,Raigad,12.16,1968,Maharashtra Forest Department,18.893376,73.112421,ok
+Katepurna Wildlife Sanctuary,wildlife_sanctuary,Akola,73.68,1988,Maharashtra Forest Department,20.597101,77.198251,fallback
+Koka Wildlife Sanctuary,wildlife_sanctuary,Bhandara,100.14,2013,Maharashtra Forest Department,21.200015,79.790119,fallback
+Koyna Wildlife Sanctuary,wildlife_sanctuary,Satara,335.3,1985,Maharashtra Forest Department,17.78,73.7,provided
+Lonar Wildlife Sanctuary,wildlife_sanctuary,Buldhana,3.83,2000,Maharashtra Forest Department,19.983092,76.491145,fallback
+Malvan Wildlife Sanctuary,wildlife_sanctuary,Sindhudurg,29.12,1987,Maharashtra Forest Department,16.06064,73.46695,fallback
+Mansingdeo Wildlife Sanctuary,wildlife_sanctuary,Nagpur,182.58,2010,Maharashtra Forest Department,21.477,79.306,manual
+Melghat Wildlife Sanctuary,wildlife_sanctuary,Amravati,778.75,1985,Maharashtra Forest Department,21.437381,77.175407,fallback
+Nagzira Wildlife Sanctuary,wildlife_sanctuary,Bhandara,152.81,1970,Maharashtra Forest Department,21.304199,80.042569,fallback
+Naigaon Mayur Wildlife Sanctuary,wildlife_sanctuary,Beed,29.89,1994,Maharashtra Forest Department,18.904388,75.596791,fallback
+Nandur Madhameshwar Wildlife Sanctuary,wildlife_sanctuary,Nashik,100.12,1986,Maharashtra Forest Department,19.983,74.031,manual
+Narnala Wildlife Sanctuary,wildlife_sanctuary,Akola,12.35,1997,Maharashtra Forest Department,21.223712,77.031856,fallback
+Nawegaon Wildlife Sanctuary,wildlife_sanctuary,Gondia,122.76,2012,Maharashtra Forest Department,20.950,80.183,manual
+New Bor Wildlife Sanctuary,wildlife_sanctuary,"Nagpur, Wardha",60.7,2012,Maharashtra Forest Department,21.010072,78.623527,fallback
+New Maldhok Bird (Gangewadi) Wildlife Sanctuary,wildlife_sanctuary,Solapur,1.98,2015,Maharashtra Forest Department,17.580,75.880,manual
+New Nagzira Wildlife Sanctuary,wildlife_sanctuary,Bhandara,151.33,2012,Maharashtra Forest Department,21.205258,79.995345,fallback
+Painganga Wildlife Sanctuary,wildlife_sanctuary,"Nanded, Yavatmal",424.89,1986,Maharashtra Forest Department,19.586,78.042,manual
+Phansad Wildlife Sanctuary,wildlife_sanctuary,Raigad,69.79,1986,Maharashtra Forest Department,18.420723,72.946701,ok
+Pranhita Wildlife Sanctuary,wildlife_sanctuary,Gadchiroli,420.06,2014,Maharashtra Forest Department,19.202519,79.926361,fallback
+Radhanagari Wildlife Sanctuary,wildlife_sanctuary,Kolhapur,351.16,1958,Maharashtra Forest Department,16.38,73.96,provided
+Sagareshwar Wildlife Sanctuary,wildlife_sanctuary,Sangli,10.87,1985,Maharashtra Forest Department,17.14234,74.363461,fallback
+Sudhagad Wildlife Sanctuary,wildlife_sanctuary,Raigad,77.13,2014,Maharashtra Forest Department,18.540386,73.320631,fallback
+Tamhini Wildlife Sanctuary,wildlife_sanctuary,Pune,49.62,2013,Maharashtra Forest Department,18.445233,73.428097,fallback
+Tansa Wildlife Sanctuary,wildlife_sanctuary,Thane,304.81,1970,Maharashtra Forest Department,19.476937,72.93983,fallback
+Thane Creek Wildlife Sanctuary,wildlife_sanctuary,Thane,16.9,2015,Maharashtra Forest Department,19.179242,72.984314,fallback
+Tipeshwar Wildlife Sanctuary,wildlife_sanctuary,Yavatmal,148.63,1997,Maharashtra Forest Department,19.992829,78.357024,fallback
+Tungareshwar Wildlife Sanctuary,wildlife_sanctuary,Palghar,85.0,2003,Maharashtra Forest Department,19.387733,72.943572,ok
+Umred Pauni Karhandla Wildlife Sanctuary,wildlife_sanctuary,"Bhandara, Nagpur",189.29,2012,Maharashtra Forest Department,20.836,79.511,manual
+Wan Wildlife Sanctuary,wildlife_sanctuary,Amravati,211.0,1997,Maharashtra Forest Department,21.238123,76.862066,fallback
+Yawal Wildlife Sanctuary,wildlife_sanctuary,Jalgaon,177.52,1969,Maharashtra Forest Department,21.226002,75.695082,fallback
+Yedsi Ramling Ghat Wildlife Sanctuary,wildlife_sanctuary,Osmanabad,22.38,1997,Maharashtra Forest Department,18.305,75.940,manual
+Kolamarka Wildlife Sanctuary,wildlife_sanctuary,Gadchiroli,180.72,2022,Maharashtra Forest Department,19.395,80.100,manual
+Muktai Bhavani Wildlife Sanctuary,wildlife_sanctuary,Gadchiroli,122.74,2022,Maharashtra Forest Department,21.042,76.062,manual
