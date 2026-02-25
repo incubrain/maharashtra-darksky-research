@@ -1,19 +1,18 @@
 """
 Factory for creating census dataset modules from configuration.
 
-Each thin census adapter (census_1991, census_2001, etc.) follows an identical
-pattern: get_meta() returns a DatasetMeta, load_and_process() delegates to
-the shared loader, and validate() delegates to the shared validator.
+Each thin census adapter follows an identical pattern: get_meta() returns
+a DatasetMeta, load_and_process() delegates to the shared loader, and
+validate() delegates to the shared validator.
 
-This factory generates those three functions from a DatasetMeta instance,
-eliminating the duplicated boilerplate across 6 dataset files.
+This factory generates those three functions from a DatasetMeta instance.
 """
 
 import pandas as pd
 
 from src.datasets._base import DatasetMeta
-from src.datasets._census_loader import load_census_csv, validate_census
-from src.datasets._census_town_loader import load_census_towns_csv, validate_census_towns
+from src.census.loader import load_census_csv, validate_census
+from src.census.town_loader import load_census_towns_csv, validate_census_towns
 
 
 def make_district_dataset(meta: DatasetMeta):

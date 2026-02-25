@@ -1,12 +1,9 @@
 """
-Census 2011 Primary Census Abstract dataset module.
+Census 2011 Primary Census Abstract dataset module (legacy).
 
 Loads district-level census data from the Census of India 2011 PCA
 Excel files (DDW_PCA27*_2011_MDDS*.xlsx), computes derived ratios,
 and normalizes district names for merging with VNL data.
-
-Source: Census of India 2011, Office of the Registrar General & Census
-Commissioner, India (ORGI).
 """
 
 import glob
@@ -17,7 +14,7 @@ import pandas as pd
 
 from src import config
 from src.datasets._base import DatasetMeta, DatasetResult
-from src.datasets._name_resolver import resolve_names
+from src.census.name_resolver import resolve_names
 from src.logging_config import get_pipeline_logger
 
 log = get_pipeline_logger(__name__)
@@ -45,29 +42,11 @@ def load_and_process(
     entity_col: str = "district",
     vnl_district_names: list[str] | None = None,
 ) -> tuple[DatasetResult, pd.DataFrame | None]:
-    """Load Census 2011 PCA data, aggregate to district level, compute derived metrics.
-
-    Parameters
-    ----------
-    data_dir : str
-        Directory containing DDW_PCA27*_2011_MDDS*.xlsx files.
-    entity_col : str
-        Column name for the district entity.
-    vnl_district_names : list[str], optional
-        VNL district names for name resolution. If None, no name
-        resolution is performed.
-
-    Returns
-    -------
-    tuple[DatasetResult, pd.DataFrame | None]
-        Result metadata and DataFrame with columns:
-        [entity_col, c2011_population, c2011_households, c2011_literacy_rate, ...]
-    """
+    """Load Census 2011 PCA data, aggregate to district level, compute derived metrics."""
     meta = get_meta()
     start = time.perf_counter()
 
     try:
-        # Find Excel files
         patterns = [
             os.path.join(data_dir, "DDW_PCA27*_2011*.xlsx"),
             os.path.join(data_dir, "DDW_PCA27*_2011*.xls"),
@@ -80,7 +59,6 @@ def load_and_process(
         files = sorted(set(files))
 
         if not files:
-            # Try loading a single consolidated CSV if available
             csv_path = os.path.join(data_dir, "census_2011_pca.csv")
             if os.path.exists(csv_path):
                 return _load_from_csv(csv_path, entity_col, vnl_district_names, meta, start)
@@ -95,7 +73,6 @@ def load_and_process(
 
         log.info("Found %d Census 2011 PCA files in %s", len(files), data_dir)
 
-        # Load and concatenate
         all_districts = []
         for filepath in files:
             df_file = _load_single_file(filepath)
@@ -114,13 +91,9 @@ def load_and_process(
         df = pd.concat(all_districts, ignore_index=True)
         log.info("Loaded %d district records from Census 2011 PCA", len(df))
 
-        # Compute derived ratios
         df = _compute_derived_ratios(df)
-
-        # Prefix all metric columns with short_label
         df = _prefix_columns(df, meta.short_label, entity_col)
 
-        # Resolve names if VNL names provided
         unmatched = []
         if vnl_district_names is not None:
             df, unmatched = _resolve_district_names(df, vnl_district_names, entity_col)
@@ -152,7 +125,6 @@ def _load_single_file(filepath: str) -> pd.DataFrame | None:
     try:
         df = pd.read_excel(filepath, engine="openpyxl")
 
-        # Filter to district-level total (not sub-district, not rural/urban split)
         if "Level" in df.columns and "TRU" in df.columns:
             mask = (df["Level"] == "DISTRICT") & (df["TRU"] == "Total")
             df = df[mask]
@@ -163,7 +135,6 @@ def _load_single_file(filepath: str) -> pd.DataFrame | None:
             log.warning("No district-level data in %s", filepath)
             return None
 
-        # Extract district name
         name_col = None
         for candidate in ["Name", "name", "DISTRICT_NAME", "District_Name"]:
             if candidate in df.columns:
@@ -174,7 +145,6 @@ def _load_single_file(filepath: str) -> pd.DataFrame | None:
             log.warning("No name column found in %s", filepath)
             return None
 
-        # Select relevant columns
         keep_cols = [name_col]
         for col in config.CENSUS_COMMON_COLUMNS:
             if col in df.columns:
@@ -183,7 +153,6 @@ def _load_single_file(filepath: str) -> pd.DataFrame | None:
         result = df[keep_cols].copy()
         result = result.rename(columns={name_col: "district"})
 
-        # Convert numeric columns
         for col in result.columns:
             if col != "district":
                 result[col] = pd.to_numeric(result[col], errors="coerce")
@@ -206,27 +175,21 @@ def _load_from_csv(
     log.info("Loading Census 2011 PCA from CSV: %s", csv_path)
     df = pd.read_csv(csv_path)
 
-    # Ensure district column exists
     if entity_col not in df.columns:
         for candidate in ["Name", "name", "DISTRICT_NAME", "District_Name", "District"]:
             if candidate in df.columns:
                 df = df.rename(columns={candidate: entity_col})
                 break
 
-    # Keep only relevant columns
     keep_cols = [entity_col]
     for col in config.CENSUS_COMMON_COLUMNS:
         if col in df.columns:
             keep_cols.append(col)
     df = df[[c for c in keep_cols if c in df.columns]]
 
-    # Compute derived ratios
     df = _compute_derived_ratios(df)
-
-    # Prefix columns
     df = _prefix_columns(df, meta.short_label, entity_col)
 
-    # Resolve names
     unmatched = []
     if vnl_district_names is not None:
         df, unmatched = _resolve_district_names(df, vnl_district_names, entity_col)
@@ -248,7 +211,6 @@ def _compute_derived_ratios(df: pd.DataFrame) -> pd.DataFrame:
     for ratio_name, (numerator_expr, denominator) in config.CENSUS_COMMON_DERIVED_RATIOS.items():
         try:
             if "+" in numerator_expr:
-                # Sum of multiple columns (e.g. "MAIN_CL_P + MAIN_AL_P")
                 parts = [p.strip() for p in numerator_expr.split("+")]
                 missing = [p for p in parts if p not in df.columns]
                 if missing or denominator not in df.columns:
@@ -258,13 +220,10 @@ def _compute_derived_ratios(df: pd.DataFrame) -> pd.DataFrame:
                 if numerator_expr not in df.columns or denominator not in df.columns:
                     continue
                 num = df[numerator_expr]
-
             denom = df[denominator]
-            # Avoid division by zero
             df[ratio_name] = num / denom.replace(0, float("nan"))
         except Exception as exc:
             log.warning("Failed to compute ratio '%s': %s", ratio_name, exc)
-
     return df
 
 
@@ -285,45 +244,29 @@ def _resolve_district_names(
     """Resolve dataset district names to VNL names."""
     dataset_names = df[entity_col].dropna().unique().tolist()
     mapping, unmatched = resolve_names(vnl_names, dataset_names)
-
-    # Apply mapping: replace dataset names with VNL names
-    df[entity_col] = df[entity_col].map(
-        lambda x: mapping.get(x, x)
-    )
-
+    df[entity_col] = df[entity_col].map(lambda x: mapping.get(x, x))
     return df, unmatched
 
 
 def validate(df: pd.DataFrame, entity_col: str = "district") -> list[str]:
-    """Validate the processed Census 2011 PCA DataFrame.
-
-    Returns list of warning strings. Empty = all good.
-    """
+    """Validate the processed Census 2011 PCA DataFrame."""
     warnings = []
-
     if df is None:
         return ["DataFrame is None"]
-
     if entity_col not in df.columns:
         warnings.append(f"Missing entity column '{entity_col}'")
         return warnings
 
     n_districts = df[entity_col].nunique()
     if n_districts < 30:
-        warnings.append(
-            f"Only {n_districts} districts found (expected ~36 for Maharashtra)"
-        )
+        warnings.append(f"Only {n_districts} districts found (expected ~36 for Maharashtra)")
 
-    # Check for expected columns
     meta = get_meta()
     expected_prefix = f"{meta.short_label}_"
     metric_cols = [c for c in df.columns if c.startswith(expected_prefix)]
     if len(metric_cols) < 5:
-        warnings.append(
-            f"Only {len(metric_cols)} metric columns found (expected >= 5)"
-        )
+        warnings.append(f"Only {len(metric_cols)} metric columns found (expected >= 5)")
 
-    # Check for excessive NaN
     for col in metric_cols:
         nan_pct = df[col].isna().mean() * 100
         if nan_pct > 20:

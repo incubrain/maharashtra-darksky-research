@@ -11,6 +11,9 @@ viirs/
 /outputs
 logs/
 
+# iNaturalist raw exports (large CSV, re-downloadable)
+data/inaturalist/maharashtra_birds.csv
+
 # Shapefiles (can be re-downloaded)
 data/shapefiles/*.shp
 data/shapefiles/*.shx
@@ -41,3 +44,7 @@ repomix-output.*
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Test / tool artifacts
+.hypothesis/
+uv.lock

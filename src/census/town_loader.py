@@ -4,9 +4,6 @@ Shared loader for town-level Census PCA CSV files.
 Reads ``data/census/census_{year}_towns.csv`` produced by
 ``scripts/extract_census_csvs.py``. Each row is a single town with the
 12 common demographic columns.
-
-Town-level data is useful for correlating population growth of
-individual towns/cities with VIIRS nighttime radiance.
 """
 
 import os
@@ -17,7 +14,7 @@ import pandas as pd
 
 from src import config
 from src.datasets._base import DatasetMeta, DatasetResult
-from src.datasets._census_loader import (
+from src.census.loader import (
     compute_derived_ratios,
     resolve_district_names,
 )
@@ -36,9 +33,7 @@ def load_census_towns_csv(
     """Load a pre-extracted town-level census CSV.
 
     Returns a DataFrame with one row per town, columns prefixed with
-    the dataset's short_label. The ``district`` column is kept for
-    merge purposes; ``town_name`` and ``town_code`` are preserved as
-    ``{prefix}_town_name`` and ``{prefix}_town_code``.
+    the dataset's short_label.
     """
     start = time.perf_counter()
 
@@ -112,17 +107,8 @@ def normalise_town_name(name: str) -> str:
 
     Strips municipal suffixes like (M Corp.), (M), (M Cl), (CT), (CB),
     (M.Corp.), (Cantt.), (R), etc. and lowercases for comparison.
-
-    Examples:
-        'Pune (M Corp.)'           -> 'pune'
-        'PUNE (M.CORP.)'           -> 'pune'
-        'Alandi (M)'               -> 'alandi'
-        'Bhigwan (Ct)'             -> 'bhigwan'
-        'Kirkee (Cb)'              -> 'kirkee'
-        'Pune (Cantt.)'            -> 'pune cantt'
     """
     name = name.strip()
-    # Remove known municipal suffixes in parentheses
     name = re.sub(
         r"\s*\("
         r"(?:M\.?\s*Corp\.?|M\s*Cl\.?|M\.?|CT|CB|R|NP|Cantt\.?|"
@@ -130,7 +116,6 @@ def normalise_town_name(name: str) -> str:
         r"\)\s*\.?\s*$",
         "", name, flags=re.IGNORECASE,
     )
-    # Also strip (Part) suffix
     name = re.sub(r"\s*\(Part\)\s*$", "", name, flags=re.IGNORECASE)
     name = name.strip("* ").lower()
     return name

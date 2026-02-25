@@ -1,0 +1,7 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Kapileshwar Temple,Temple,Velhale,Jalgaon,Jalgaon,First,20.9946398,75.5574167,photon
+Jhulte Manore,Other,Farkanda,Erandol,Jalgaon,Final,20.8428827,75.5261246,place_photon_s1
+Pandavwada Masjid,Other,Erandol,Erandol,Jalgaon,Final,20.923898,75.329305,fallback
+Parola Fort,Fort,Parola,Parola,Jalgaon,Final,20.876364,75.114759,fallback
+Ves (Amalner Fort Gate and Bastion),Other,Amalner,Amalner,Jalgaon,Final,21.049319,75.057339,fallback
+Shiv Temple (Tondapur),Temple,Tondapur,Jamner,Jalgaon,Final,20.576285,75.805943,fallback

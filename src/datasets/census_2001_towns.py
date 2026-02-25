@@ -1,7 +1,7 @@
 """Census 2001 PCA dataset — town level."""
 
 from src.datasets._base import DatasetMeta
-from src.datasets._census_factory import make_town_dataset
+from src.census.factory import make_town_dataset
 
 get_meta, load_and_process, validate = make_town_dataset(DatasetMeta(
     name="census_2001_towns",

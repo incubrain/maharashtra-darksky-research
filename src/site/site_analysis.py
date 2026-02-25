@@ -51,7 +51,7 @@ def _build_locations_filtered(entity_type="all", city_source="config"):
     locations = {}
     if entity_type in ("city", "all"):
         if city_source == "census":
-            from src.census_town_locations import load_census_town_locations
+            from src.census.town_locations import load_census_town_locations
             towns = load_census_town_locations()
             for name, info in towns.items():
                 locations[name] = (info["lat"], info["lon"], "city", info["district"])

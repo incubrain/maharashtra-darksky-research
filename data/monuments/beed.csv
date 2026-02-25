@@ -1,0 +1,21 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Amleshwar Temple,Temple,Ambejogai,Ambejogai,Beed,First,18.731823,76.385484,fallback
+Adya Kavi Shri Mukundraj Samadhi,Other,Ambejogai,Beed,Beed,Final,18.704861,76.420276,fallback
+Kankaleshwar Temple,Temple,Beed,Beed,Beed,Final,18.987655,75.768154,ok
+Kedareshwar Temple (Dharmapuri),Temple,Dharmapuri,Ambejogai,Beed,Final,18.731998,76.628092,fallback
+Kotwali Gate (Beed),Other,Beed,Beed,Beed,Final,18.990406,75.754229,fallback
+Kholeshwar Temple,Temple,Ambejogai,Ambejogai,Beed,First,18.731823,76.385484,fallback
+Khandeshwari Temple (Beed),Temple,Beed,Beed,Beed,Final,18.990406,75.754229,fallback
+Gunj Gate,Other,Beed,Beed,Beed,Final,18.990406,75.754229,fallback
+Jogi Sabhamandap,Caves,Ambejogai,Ambejogai,Beed,Final,18.731823,76.385484,fallback
+Jame Masjid (Beed),Other,Beed,Beed,Beed,Final,18.990406,75.754229,fallback
+Dharur Fort,Fort,Dharur,Dharur,Beed,Final,18.829474,76.218896,fallback
+Dharmapuri Fort,Fort,Dharmapuri,Parli Vaijanath,Beed,Final,18.7324384,76.6327608,photon
+Dhonda Gate,Other,Beed,Beed,Beed,Final,18.990406,75.754229,fallback
+Pir Balashah Dargah,Other,Beed,Beed,Beed,Final,18.990406,75.754229,fallback
+Mahadev Temple (Patoda),Temple,Patoda,Patoda,Beed,Final,18.805051,75.483062,fallback
+Mohammad Bin Tughlaq Tomb,Other,Karjani,Beed,Beed,Final,18.9918442,75.909784,place_photon_s1
+Rajuri Gate,Other,Beed,Beed,Beed,Final,18.990406,75.754229,fallback
+Ran Khamb,Other,Beed,Beed,Beed,Final,18.990406,75.754229,fallback
+Rani Annapurnabai Samadhi,Other,Nandurghat,Kej,Beed,Final,18.67491,75.836177,fallback
+Shehenshawali Dargah,Other,Beed,Beed,Beed,Final,18.990406,75.754229,fallback

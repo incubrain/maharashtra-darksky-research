@@ -1,0 +1,5 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Delhi Gate (Karanja Lad),Other,Karanja Lad,Karanja Lad,Washim,First,20.491975,77.481248,fallback
+Darwa Gate (Karanja Lad),Other,Karanja Lad,Karanja Lad,Washim,Final,20.491975,77.481248,fallback
+Poha Gate (Karanja Lad),Other,Karanja Lad,Karanja Lad,Washim,Final,20.491975,77.481248,fallback
+Mangrul Gate (Karanja Lad),Other,Karanja Lad,Karanja Lad,Washim,Final,20.491975,77.481248,fallback

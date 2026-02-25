@@ -1,0 +1,11 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+August Kranti Maidan,Other,Grant Road,Mumbai,Mumbai,Final,18.963355,72.815826,fallback
+Gateway of India,Other,Apollo Bundar,Mumbai,Mumbai,Final,18.921966,72.834566,fallback
+Dean Bunglow (Rudyard Kipling),Other,Mumbai,Mumbai,Mumbai,Final,19.05921,72.861324,fallback
+Dharavi Fort,Fort,Dharavi,Mumbai,Mumbai,Final,19.044463,72.858618,fallback
+Bandra Fort,Fort,Bandra,Mumbai,Mumbai,Final,19.041864,72.818378,ok
+Banganga Talav,Other,Walkeshwar,Mumbai,Mumbai,Final,18.95242,72.803894,fallback
+Mahim Fort,Fort,Mahim,Mumbai Suburbs,Mumbai,Final,19.042011,72.838127,ok
+Worli Fort,Fort,Worli,Mumbai Suburbs,Mumbai,Final,19.023749,72.816836,ok
+Shewri Fort,Fort,Shewri,Mumbai,Mumbai,Final,18.9404925,72.8357856,photon
+Saint George Fort,Fort,Mumbai,Mumbai,Mumbai,Final,18.938651,72.835871,ok

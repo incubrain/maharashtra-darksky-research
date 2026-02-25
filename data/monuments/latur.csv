@@ -1,0 +1,6 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Ausa Fort,Fort,Ausa,Ausa,Latur,Final,18.240932,76.499708,ok
+Udgir Fort,Fort,Udgir,Udgir,Latur,Final,18.402744,77.117898,ok
+Jame Masjid (Ausa),Other,Ausa,Ausa,Latur,Final,18.251024,76.500958,fallback
+Devi Temple (Killari),Temple,Killari,Ausa,Latur,Final,18.073813,76.592866,fallback
+Baug-e-Hissam,Other,Udgir,Udgir,Latur,Final,18.392135,77.119612,fallback

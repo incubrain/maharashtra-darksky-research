@@ -1,0 +1,6 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Kalikadevi Temple,Temple,Shirud,Dhule,Dhule,Final,20.734423,74.892018,fallback
+Jain Temple (Nizampur),Temple,Nizampur,Sakri,Dhule,First,21.1305215,74.4900614,place_photon_s1
+Harba Temple / Mahadev Temple,Temple,Methi,Sindhkhed,Dhule,First,21.245077,74.639809,fallback
+Bhavani Temple / Vishnu Temple (Balaji),Temple,Methi,Sindhkhed,Dhule,First,21.245077,74.639809,fallback
+Laling Fort,Fort,Laling,Dhule,Dhule,First,20.811514,74.739214,ok

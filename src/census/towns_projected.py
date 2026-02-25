@@ -5,10 +5,6 @@ Loads town-level data from all available census years (1991, 2001, 2011),
 matches towns across censuses within the same district using normalised
 names, then projects values for each VIIRS year (2012-2024) using linear
 interpolation/extrapolation.
-
-Towns with fewer than 2 census anchor points are excluded from
-projections (they exist only in one census, typically new Census Towns
-that emerged between 2001-2011).
 """
 
 import os
@@ -20,8 +16,8 @@ from difflib import SequenceMatcher
 
 from src import config
 from src.datasets._base import DatasetMeta, DatasetResult
-from src.datasets._census_loader import compute_derived_ratios, resolve_district_names
-from src.datasets._census_town_loader import normalise_town_name
+from src.census.loader import compute_derived_ratios, resolve_district_names
+from src.census.town_loader import normalise_town_name
 from src.logging_config import get_pipeline_logger
 
 log = get_pipeline_logger(__name__)
@@ -50,19 +46,8 @@ def get_meta() -> DatasetMeta:
 def _match_towns_across_years(
     town_dfs: dict[int, pd.DataFrame],
 ) -> dict[str, dict[int, dict]]:
-    """Match towns across census years within the same district.
-
-    Returns a dict keyed by ``(district, normalised_town_name)`` where
-    each value is ``{year: {metric: value, ...}, ...}``.
-
-    Matching strategy:
-    1. Normalise town names (strip municipal suffixes, lowercase)
-    2. Exact match within the same district
-    3. Fuzzy match (>= 0.85 similarity) for remaining unmatched towns
-    """
-    # Build normalised index: {(district, norm_name): {year: row_dict}}
+    """Match towns across census years within the same district."""
     anchors: dict[tuple[str, str], dict[int, dict]] = {}
-    # Track original names for logging
     original_names: dict[tuple[str, str], str] = {}
 
     for year, df in sorted(town_dfs.items()):
@@ -79,14 +64,11 @@ def _match_towns_across_years(
                                   if col not in ("district", "district_code", "level",
                                                  "tru", "entity_name", "entity_code")}
 
-    # Second pass: fuzzy match unmatched towns within each district
-    # Group keys by district
     by_district: dict[str, list[tuple[str, str]]] = {}
     for key in anchors:
         by_district.setdefault(key[0], []).append(key)
 
     for district, keys in by_district.items():
-        # Find keys with only one anchor year — candidates for fuzzy matching
         single_year_keys = [k for k in keys if len(anchors[k]) == 1]
         multi_year_keys = [k for k in keys if len(anchors[k]) >= 2]
 
@@ -96,7 +78,7 @@ def _match_towns_across_years(
             best_score = 0.0
             for mk in multi_year_keys:
                 if sk_year in anchors[mk]:
-                    continue  # already has this year
+                    continue
                 score = SequenceMatcher(None, sk[1], mk[1]).ratio()
                 if score > best_score:
                     best_score = score
@@ -105,7 +87,6 @@ def _match_towns_across_years(
                 anchors[best_match][sk_year] = anchors[sk][sk_year]
                 del anchors[sk]
 
-    # Convert to simpler key format for the caller
     result: dict[str, dict[int, dict]] = {}
     for (district, norm), year_data in anchors.items():
         town_key = f"{district}|{norm}"
@@ -159,7 +140,6 @@ def load_and_process(
     start = time.perf_counter()
 
     try:
-        # Load available town CSV files
         town_dfs = {}
         for year in CENSUS_YEARS:
             csv_path = os.path.join(data_dir, f"census_{year}_towns.csv")
@@ -181,26 +161,22 @@ def load_and_process(
                 timing_seconds=elapsed,
             ), None
 
-        # Resolve district names before matching
         if vnl_district_names is not None:
             for year, df in town_dfs.items():
                 df, _ = resolve_district_names(df, vnl_district_names, entity_col)
                 town_dfs[year] = df
 
-        # Match towns across census years
         matched = _match_towns_across_years(town_dfs)
 
-        # Get metric columns from the latest year
         latest_year = max(town_dfs.keys())
         metric_cols = [c for c in town_dfs[latest_year].columns
                        if c not in (entity_col, "district_code", "level", "tru",
                                     "entity_name", "entity_code")]
 
-        # Project each matched town for each VIIRS year
         rows = []
         for town_key, year_data in matched.items():
             if len(year_data) < 2:
-                continue  # need 2+ anchors
+                continue
 
             district = town_key.split("|")[0]
             norm_name = town_key.split("|")[1]
@@ -223,7 +199,6 @@ def load_and_process(
 
         projected = pd.DataFrame(rows)
 
-        # Prefix columns
         prefix = meta.short_label
         rename_map = {}
         for col in projected.columns:

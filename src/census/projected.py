@@ -5,14 +5,6 @@ Loads all available census CSVs (1991, 2001, 2011), computes derived
 ratios, then projects values for each VIIRS year (2012-2024) using
 linear interpolation/extrapolation between the two nearest census
 anchor points.
-
-This produces a *timeseries* dataset (one row per district per year)
-that can be merged year-matched with VNL data, enabling direct
-comparison of census-projected growth against observed ALAN trends.
-
-Design note: the interpolation strategy is deliberately simple (linear)
-to start. The module is structured so that switching to a better model
-(exponential, logistic) only requires changing ``_interpolate()``.
 """
 
 import os
@@ -23,21 +15,17 @@ import pandas as pd
 
 from src import config
 from src.datasets._base import DatasetMeta, DatasetResult
-from src.datasets._census_loader import (
+from src.census.loader import (
     compute_derived_ratios,
     resolve_district_names,
     validate_census,
 )
-from src.datasets._name_resolver import resolve_names
+from src.census.name_resolver import resolve_names
 from src.logging_config import get_pipeline_logger
 
 log = get_pipeline_logger(__name__)
 
-# Census years to load, in chronological order.
-# Add new years here as data becomes available.
 CENSUS_YEARS = [1991, 2001, 2011]
-
-# Years to project for (VIIRS study period)
 PROJECTION_YEARS = list(config.STUDY_YEARS)  # 2012-2024
 
 
@@ -62,17 +50,12 @@ def load_and_process(
     entity_col: str = "district",
     vnl_district_names: list[str] | None = None,
 ) -> tuple[DatasetResult, pd.DataFrame | None]:
-    """Load census CSVs, project values for VIIRS years.
-
-    Returns a timeseries DataFrame with columns:
-        [district, year, cproj_TOT_P, cproj_literacy_rate, ...]
-    """
+    """Load census CSVs, project values for VIIRS years."""
     meta = get_meta()
     start = time.perf_counter()
 
     try:
-        # ── Load available census CSVs ──────────────────────────────
-        anchors = {}  # year -> DataFrame (unprefixed, with derived ratios)
+        anchors = {}
         for year in CENSUS_YEARS:
             csv_path = os.path.join(data_dir, f"census_{year}_pca.csv")
             if os.path.exists(csv_path):
@@ -93,29 +76,21 @@ def load_and_process(
                 timing_seconds=elapsed,
             ), None
 
-        # ── Resolve names before projection ─────────────────────────
-        # Use the latest census for name resolution (most districts)
-        latest_year = max(anchors.keys())
         if vnl_district_names is not None:
             for year, df in anchors.items():
                 dataset_names = df[entity_col].dropna().unique().tolist()
                 mapping, _ = resolve_names(vnl_district_names, dataset_names)
                 anchors[year][entity_col] = df[entity_col].map(lambda x, m=mapping: m.get(x, x))
 
-        # ── Find common districts and metric columns ────────────────
         all_districts = set()
         for df in anchors.values():
             all_districts.update(df[entity_col].dropna().unique())
 
-        # Districts present in the two most recent census years
-        # (for projection we need at least 2 anchor points)
         sorted_years = sorted(anchors.keys())
         metric_cols = [c for c in anchors[sorted_years[-1]].columns if c != entity_col]
 
-        # ── Project each district for each VIIRS year ───────────────
         rows = []
         for district in sorted(all_districts):
-            # Build anchor series for this district: {year: {metric: value}}
             district_anchors = {}
             for year in sorted_years:
                 df = anchors[year]
@@ -124,7 +99,6 @@ def load_and_process(
                     district_anchors[year] = match.iloc[0].to_dict()
 
             if len(district_anchors) < 2:
-                # Can't project with only one data point — skip
                 continue
 
             anchor_years = sorted(district_anchors.keys())
@@ -139,7 +113,6 @@ def load_and_process(
 
         projected = pd.DataFrame(rows)
 
-        # ── Prefix columns ──────────────────────────────────────────
         rename_map = {}
         for col in projected.columns:
             if col not in (entity_col, "year"):
@@ -174,15 +147,7 @@ def _interpolate(
     district_anchors: dict[int, dict],
     metric: str,
 ) -> float | None:
-    """Linear interpolation/extrapolation from census anchor points.
-
-    Uses the two nearest anchor years that have valid data for this metric.
-    For years beyond the last anchor, extrapolates from the last two.
-
-    Future improvement: replace with exponential or logistic growth model
-    when more census years (e.g. 1981, 1991) are added.
-    """
-    # Collect valid (year, value) pairs
+    """Linear interpolation/extrapolation from census anchor points."""
     points = []
     for y in anchor_years:
         val = district_anchors[y].get(metric)
@@ -190,12 +155,8 @@ def _interpolate(
             points.append((y, float(val)))
 
     if len(points) < 2:
-        # Only one anchor — return that constant value
         return points[0][1] if points else None
 
-    # Find the two best anchor points for interpolation:
-    # - If target is between two anchors, use those two (interpolation)
-    # - If target is beyond all anchors, use the last two (extrapolation)
     if target_year <= points[0][0]:
         y0, v0 = points[0]
         y1, v1 = points[1]
@@ -203,7 +164,6 @@ def _interpolate(
         y0, v0 = points[-2]
         y1, v1 = points[-1]
     else:
-        # Find bracketing pair
         for i in range(len(points) - 1):
             if points[i][0] <= target_year <= points[i + 1][0]:
                 y0, v0 = points[i]
@@ -213,7 +173,6 @@ def _interpolate(
             y0, v0 = points[-2]
             y1, v1 = points[-1]
 
-    # Linear interpolation/extrapolation
     if y1 == y0:
         return v0
     slope = (v1 - v0) / (y1 - y0)

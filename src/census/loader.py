@@ -17,7 +17,7 @@ import pandas as pd
 
 from src import config
 from src.datasets._base import DatasetMeta, DatasetResult
-from src.datasets._name_resolver import resolve_names
+from src.census.name_resolver import resolve_names
 from src.logging_config import get_pipeline_logger
 
 log = get_pipeline_logger(__name__)

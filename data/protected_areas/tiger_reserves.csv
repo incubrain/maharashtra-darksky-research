@@ -1,0 +1,7 @@
+name,category,district,core_area_sq_km,buffer_area_sq_km,establishment_year,responsible_department,lat,lon,geocode_status
+Tadoba-Andhari Tiger Reserve,tiger_reserve,Chandrapur,625.82,1101.77,1993,Maharashtra Forest Department / NTCA,20.267028,79.494519,ok
+Pench Tiger Reserve,tiger_reserve,Nagpur,257.26,483.96,1999,Maharashtra Forest Department / NTCA,21.695055,79.24877,ok
+Nawegaon-Nagzira Tiger Reserve,tiger_reserve,Gondia,653.67,1241.27,2013,Maharashtra Forest Department / NTCA,21.248182,79.953287,fallback
+Melghat Tiger Reserve,tiger_reserve,Amravati,1500.49,1268.03,1974,Maharashtra Forest Department / NTCA,21.4,77.15,provided
+Sahyadri Tiger Reserve,tiger_reserve,"Satara, Sangli, Kolhapur, Ratnagiri",600.12,565.45,2010,Maharashtra Forest Department / NTCA,17.188582,73.786853,ok
+Bor Tiger Reserve,tiger_reserve,Wardha,138.12,678.15,2014,Maharashtra Forest Department / NTCA,21.009562,78.607507,ok

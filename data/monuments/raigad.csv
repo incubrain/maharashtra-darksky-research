@@ -1,0 +1,7 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Underi Fort,Fort,Underi,Alibaug,Raigad,Final,18.706716,72.842029,ok
+Mangad Fort,Fort,Mashidwadi,Mangaon,Raigad,Final,18.311929,73.351146,ok
+Vasudeo Balwant Phadke Birthplace,Other,Shirdhon,Panvel,Raigad,Final,19.0464892,73.0688427,photon
+Sarkhel Kanhoji Angre Samadhi,Other,Alibaug,Alibaug,Raigad,Final,18.649843,72.876547,fallback
+Karnala Fort,Fort,Kalhe,Panvel,Raigad,First,18.881009,73.118297,ok
+Khanderi Fort,Fort,Khanderi,Alibaug,Raigad,First,18.704424,72.812628,ok

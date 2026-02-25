@@ -28,8 +28,8 @@ import pandas as pd
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src import config
-from src.datasets._census_town_loader import normalise_town_name
-from src.datasets._census_loader import compute_derived_ratios
+from src.census.town_loader import normalise_town_name
+from src.census.loader import compute_derived_ratios
 
 CENSUS_YEARS = [1991, 2001, 2011]
 VIIRS_YEARS = list(config.STUDY_YEARS)  # 2012-2024
