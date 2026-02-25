@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 from src import config
-from src.census_town_locations import load_census_town_locations, _title_case_town
+from src.census.town_locations import load_census_town_locations, _title_case_town
 
 
 # ── Synthetic geocoded CSV for testing ────────────────────────────────
@@ -168,7 +168,7 @@ class TestCitySourceIntegration:
         _write_sample_csv(str(tmp_path))
 
         # Monkeypatch load_census_town_locations to use our temp dir
-        import src.census_town_locations as ctl_module
+        import src.census.town_locations as ctl_module
         original_loader = ctl_module.load_census_town_locations
 
         def patched_loader(**kwargs):

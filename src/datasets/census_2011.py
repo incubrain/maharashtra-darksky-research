@@ -1,7 +1,7 @@
 """Census 2011 PCA dataset — urban district-level data."""
 
 from src.datasets._base import DatasetMeta
-from src.datasets._census_factory import make_district_dataset
+from src.census.factory import make_district_dataset
 
 get_meta, load_and_process, validate = make_district_dataset(DatasetMeta(
     name="census_2011",

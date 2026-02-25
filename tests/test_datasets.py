@@ -58,7 +58,7 @@ class TestNameResolver:
     """Tests for _name_resolver.py."""
 
     def test_normalize_name(self):
-        from src.datasets._name_resolver import normalize_name
+        from src.census.name_resolver import normalize_name
 
         assert normalize_name("  Mumbai  ") == "mumbai"
         assert normalize_name("PUNE") == "pune"
@@ -67,7 +67,7 @@ class TestNameResolver:
         assert normalize_name(None) == ""
 
     def test_exact_match(self):
-        from src.datasets._name_resolver import resolve_names
+        from src.census.name_resolver import resolve_names
 
         vnl = ["Mumbai", "Pune", "Nagpur"]
         dataset = ["Mumbai", "Pune", "Nagpur"]
@@ -78,7 +78,7 @@ class TestNameResolver:
         assert mapping["Mumbai"] == "Mumbai"
 
     def test_case_insensitive_match(self):
-        from src.datasets._name_resolver import resolve_names
+        from src.census.name_resolver import resolve_names
 
         vnl = ["Mumbai", "Pune"]
         dataset = ["MUMBAI", "pune"]
@@ -89,7 +89,7 @@ class TestNameResolver:
         assert mapping["pune"] == "Pune"
 
     def test_override_match(self):
-        from src.datasets._name_resolver import resolve_names
+        from src.census.name_resolver import resolve_names
 
         vnl = ["Bid", "Gondiya", "Raigarh"]
         dataset = ["Beed", "Gondia", "Raigad"]
@@ -101,7 +101,7 @@ class TestNameResolver:
         assert len(unmatched) == 0
 
     def test_fuzzy_match(self):
-        from src.datasets._name_resolver import resolve_names
+        from src.census.name_resolver import resolve_names
 
         vnl = ["Ahmadnagar", "Aurangabad"]
         dataset = ["Ahmednagar", "Aurangabad"]
@@ -111,7 +111,7 @@ class TestNameResolver:
         assert len(unmatched) == 0
 
     def test_unmatched_names(self):
-        from src.datasets._name_resolver import resolve_names
+        from src.census.name_resolver import resolve_names
 
         vnl = ["Mumbai", "Pune"]
         dataset = ["Mumbai", "Zzzzzzz"]
@@ -128,7 +128,7 @@ class TestCensus2011PCA:
     """Tests for census_2011_pca.py."""
 
     def test_get_meta(self):
-        from src.datasets.census_2011_pca import get_meta
+        from src.census.legacy_pca import get_meta
 
         meta = get_meta()
         assert meta.name == "census_2011_pca"
@@ -137,7 +137,7 @@ class TestCensus2011PCA:
         assert 2011 in meta.reference_years
 
     def test_load_missing_dir(self, tmp_path):
-        from src.datasets.census_2011_pca import load_and_process
+        from src.census.legacy_pca import load_and_process
 
         result, df = load_and_process(str(tmp_path / "nonexistent"))
         assert not result.ok
@@ -145,7 +145,7 @@ class TestCensus2011PCA:
 
     def test_load_from_csv(self, tmp_path):
         """Test loading from a pre-processed CSV."""
-        from src.datasets.census_2011_pca import load_and_process
+        from src.census.legacy_pca import load_and_process
 
         # Create a simple census CSV
         data = {
@@ -179,7 +179,7 @@ class TestCensus2011PCA:
 
     def test_derived_ratios(self, tmp_path):
         """Test that derived ratios are computed correctly."""
-        from src.datasets.census_2011_pca import load_and_process
+        from src.census.legacy_pca import load_and_process
 
         data = {
             "district": ["TestDistrict"],
@@ -212,7 +212,7 @@ class TestCensus2011PCA:
         assert df["c2011_workforce_rate"].iloc[0] == pytest.approx(0.5)
 
     def test_validate_good_data(self, tmp_path):
-        from src.datasets.census_2011_pca import load_and_process, validate
+        from src.census.legacy_pca import load_and_process, validate
 
         # Create 36 districts
         districts = [f"District{i}" for i in range(36)]

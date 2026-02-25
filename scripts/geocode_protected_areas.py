@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Geocode protected areas (national parks, tiger reserves, wildlife sanctuaries,
-conservation reserves) using OpenStreetMap Nominatim.
+Geocode protected areas using OpenStreetMap Nominatim.
 
 Reads CSV files from data/protected_areas/, geocodes each site that lacks
 coordinates, and writes updated CSVs in place.
@@ -18,80 +17,15 @@ import argparse
 import glob
 import os
 import sys
-import time
 
 import pandas as pd
 
-# Allow running from project root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src import config
+from src.geocoding.nominatim import USER_AGENT, RATE_LIMIT_SECONDS
+from src.protected_areas.geocoding import geocode_site
 
-MAHARASHTRA_BBOX = config.MAHARASHTRA_BBOX
 DATA_DIR = "data/protected_areas"
-
-# Nominatim configuration
-USER_AGENT = "maharashtra-darksky-research/1.0"
-RATE_LIMIT_SECONDS = 1.1  # Slightly over 1s to be safe
-
-
-def geocode_site(geocoder, rate_limiter, name: str, district: str | None) -> dict:
-    """Geocode a single protected area with fallback strategies.
-
-    Returns dict with lat, lon, geocode_status, geocode_query.
-    """
-    # Clean name: strip category suffix for better matching
-    clean = name.strip()
-    for suffix in [
-        " Wildlife Sanctuary", " National Park", " Tiger Reserve",
-        " Conservation Reserve", " Bird Sanctuary",
-    ]:
-        if clean.endswith(suffix):
-            clean = clean[: -len(suffix)].strip()
-            break
-
-    strategies = []
-    if district:
-        # Use first district if multiple
-        primary_district = district.split(",")[0].strip()
-        strategies.extend([
-            # Strategy 1: Full name as-is + Maharashtra
-            f"{name}, {primary_district} district, Maharashtra, India",
-            # Strategy 2: Clean name + district
-            f"{clean}, {primary_district}, Maharashtra, India",
-            # Strategy 3: Full name without district
-            f"{name}, Maharashtra, India",
-        ])
-    else:
-        strategies.extend([
-            f"{name}, Maharashtra, India",
-            f"{clean}, Maharashtra, India",
-        ])
-
-    for i, query in enumerate(strategies):
-        try:
-            location = rate_limiter(query)
-            if location is not None:
-                lat, lon = location.latitude, location.longitude
-                # Validate within Maharashtra bounding box (with margin)
-                if (
-                    MAHARASHTRA_BBOX["south"] - 0.5 <= lat <= MAHARASHTRA_BBOX["north"] + 0.5
-                    and MAHARASHTRA_BBOX["west"] - 0.5 <= lon <= MAHARASHTRA_BBOX["east"] + 0.5
-                ):
-                    status = "ok" if i == 0 else "fallback"
-                    return {
-                        "lat": round(lat, 6),
-                        "lon": round(lon, 6),
-                        "geocode_status": status,
-                    }
-        except Exception as exc:
-            print(f"    Geocode error for '{query}': {exc}")
-
-    return {
-        "lat": None,
-        "lon": None,
-        "geocode_status": "failed",
-    }
 
 
 def geocode_csv(csv_path: str, dry_run: bool = False) -> pd.DataFrame:
@@ -103,7 +37,6 @@ def geocode_csv(csv_path: str, dry_run: bool = False) -> pd.DataFrame:
     filename = os.path.basename(csv_path)
     print(f"\n  [{filename}] {len(df)} sites total")
 
-    # Identify pending sites
     pending = df[
         (df["geocode_status"] == "pending")
         | (df["geocode_status"] == "failed")
@@ -135,7 +68,7 @@ def geocode_csv(csv_path: str, dry_run: bool = False) -> pd.DataFrame:
         district = row.get("district", "")
         if pd.isna(district):
             district = ""
-        result = geocode_site(geocoder, rate_limiter, row["name"], district)
+        result = geocode_site(rate_limiter, row["name"], district)
 
         df.at[idx, "lat"] = result["lat"]
         df.at[idx, "lon"] = result["lon"]
@@ -143,17 +76,16 @@ def geocode_csv(csv_path: str, dry_run: bool = False) -> pd.DataFrame:
 
         if result["geocode_status"] == "ok":
             ok_count += 1
-            print(f"    OK: {row['name']} → {result['lat']}, {result['lon']}")
+            print(f"    OK: {row['name']} -> {result['lat']}, {result['lon']}")
         elif result["geocode_status"] == "fallback":
             fallback_count += 1
-            print(f"    FALLBACK: {row['name']} → {result['lat']}, {result['lon']}")
+            print(f"    FALLBACK: {row['name']} -> {result['lat']}, {result['lon']}")
         else:
             failed_count += 1
             print(f"    FAILED: {row['name']}")
 
     print(f"    Results: {ok_count} ok, {fallback_count} fallback, {failed_count} failed")
 
-    # Save progress
     df.to_csv(csv_path, index=False)
     print(f"    Saved: {csv_path}")
 
