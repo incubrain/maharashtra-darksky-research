@@ -44,3 +44,7 @@ repomix-output.*
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Test / tool artifacts
+.hypothesis/
+uv.lock
