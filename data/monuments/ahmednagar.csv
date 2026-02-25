@@ -1,6 +1,6 @@
 name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
 Kharda Fort,Fort,Kharda,Jamkhed,Ahmednagar,First,18.637325,75.475202,fallback
-Gadhi - Ahilyabai Holkar Birthplace,Temple,Chondi,Jamkhed,Ahmednagar,Final,,,failed
+Gadhi - Ahilyabai Holkar Birthplace,Temple,Chondi,Jamkhed,Ahmednagar,Final,19.1627725,74.8580243,place_photon_s1
 Raghobadada Wada,Other,Kopargaon,Kopargaon,Ahmednagar,Final,19.885,74.4762,fallback
 Lakshmi Temple (Shrigonda),Temple,Shrigonda,Shrigonda,Ahmednagar,Final,18.61452,74.699067,fallback
 Raghaveshwar Mahadev Temple,Temple,Kopargaon,Kopargaon,Ahmednagar,Final,19.885,74.4762,fallback

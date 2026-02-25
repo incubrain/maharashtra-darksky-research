@@ -1,4 +1,4 @@
 name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
 Ambagad Fort,Fort,Ambagad,Tumsar,Bhandara,First,21.437165,79.667998,fallback
 Gosavi Samadhi,Other,Mendha Ward,Bhandara,Bhandara,Final,20.901746,79.617953,fallback
-Murlidhar Temple (Pavni),Temple,Pavni,Pavni,Bhandara,Final,,,failed
+Murlidhar Temple (Pavni),Temple,Pavni,Pavni,Bhandara,Final,21.1225869,79.794509,place_photon_s1

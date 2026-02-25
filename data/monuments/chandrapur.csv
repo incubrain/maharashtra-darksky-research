@@ -1,11 +1,11 @@
 name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
-Garud Stambha (Manikgad),Other,Manikgad,Jivati,Chandrapur,Final,,,failed
+Garud Stambha (Manikgad),Other,Manikgad,Jivati,Chandrapur,Final,20.0967555,79.5045475,place_photon_s1
 Rushi Talav Cave,Caves,Bhatala,Varora,Chandrapur,Final,20.345784,79.082959,fallback
-Prehistoric Site (Manikgad),Archaeological Site,Manikgad,Jivati,Chandrapur,Final,,,failed
+Prehistoric Site (Manikgad),Archaeological Site,Manikgad,Jivati,Chandrapur,Final,20.0967555,79.5045475,place_photon_s1
 Bhavani Temple (Bhatala),Temple,Bhatala,Varora,Chandrapur,Final,20.345784,79.082959,fallback
-Manikgad Fort,Fort,Manikgad,Jivati,Chandrapur,Final,,,failed
+Manikgad Fort,Fort,Manikgad,Jivati,Chandrapur,Final,18.8261809,73.1934965,nominatim_retry
 Mahadev Temple (Babupeth),Temple,Babupeth,Chandrapur,Chandrapur,Final,19.924486,79.315673,fallback
 Mahadev Temple (Bhatala),Temple,Bhatala,Varora,Chandrapur,First,20.345784,79.082959,fallback
-Vishnu Temple (Manikgad),Temple,Manikgad,Jivati,Chandrapur,Final,,,failed
+Vishnu Temple (Manikgad),Temple,Manikgad,Jivati,Chandrapur,Final,20.0967555,79.5045475,place_photon_s1
 Shankar Temple (Bhisi),Temple,Bhisi,Chimur,Chandrapur,Final,20.632284,79.401527,fallback
 Someshwar Temple (Rajura),Temple,Rajura,Rajura,Chandrapur,Final,19.771207,79.369635,fallback

@@ -1,6 +1,6 @@
 name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
 Dr. Babasaheb Ambedkar Birthplace (Satara),Other,Satara,Satara,Satara,Final,17.688321,74.004173,fallback
-Bhairavnath Temple,Temple,Kinkali,Wai,Satara,Final,,,failed
-Vasudeo Swami Math,Other,Kaneri,Khandala,Satara,Final,,,failed
-Sarsenapati Hambirrao Mohite Samadhi,Other,Talbid,Karhad,Satara,Final,,,failed
+Bhairavnath Temple,Temple,Kinkali,Wai,Satara,Final,16.6603965,74.2286317,nominatim_retry
+Vasudeo Swami Math,Other,Kaneri,Khandala,Satara,Final,17.6846858,73.9884641,photon
+Sarsenapati Hambirrao Mohite Samadhi,Other,Talbid,Karhad,Satara,Final,18.9051262,77.4948556,place_photon_s1
 Savitribai Phule Birthplace,Other,Naigaon,Khandala,Satara,Final,18.110761,73.966221,fallback

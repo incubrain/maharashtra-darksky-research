@@ -1,2 +1,2 @@
 name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
-Jain Cave,Caves,MahodaTarfeHaveli,Shahada,Nandurbar,Final,,,failed
+Jain Cave,Caves,MahodaTarfeHaveli,Shahada,Nandurbar,Final,19.199215,72.8420986,nominatim_retry

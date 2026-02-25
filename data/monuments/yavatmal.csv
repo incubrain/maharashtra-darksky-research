@@ -1,3 +1,3 @@
 name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
-Kedareshwar Temple (Yavatmal),Temple,Azaad Maidan,Yavatmal,Yavatmal,First,,,failed
+Kedareshwar Temple (Yavatmal),Temple,Azaad Maidan,Yavatmal,Yavatmal,First,20.4235513,77.9026709,photon
 Mahadev Temple (Pusad),Temple,Pusad,Yavatmal,Yavatmal,First,19.88582,77.484612,fallback

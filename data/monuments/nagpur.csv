@@ -1,47 +1,47 @@
 name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
 Umred Fort,Fort,Umred,Umred,Nagpur,Final,20.848486,79.324641,fallback
-Kapatram Temple,Temple,Gadmandir,Ramtek,Nagpur,First,,,failed
+Kapatram Temple,Temple,Gadmandir,Ramtek,Nagpur,First,21.1450152,79.0514676,photon
 Kapureshwar Temple,Temple,Katol,Nagpur,Nagpur,First,21.275182,78.58657,fallback
-Keval Narsimha Temple,Temple,Gadmandir,Ramtek,Nagpur,First,,,failed
-Ganesh Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Chandramauli Temple,Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Chatri No. 3,Other,Ambala Talav,Ramtek,Nagpur,First,,,failed
-Chatri No. 4,Other,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Chatri No. 19,Other,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Chatri No. 24,Other,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Chatri No. 26,Other,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Jagannath Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Datta Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
+Keval Narsimha Temple,Temple,Gadmandir,Ramtek,Nagpur,First,21.3976503,79.3341141,photon
+Ganesh Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Chandramauli Temple,Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1450152,79.0514676,photon
+Chatri No. 3,Other,Ambala Talav,Ramtek,Nagpur,First,18.8599853,77.5532849,nominatim_retry
+Chatri No. 4,Other,Ambala Talav,Ramtek,Nagpur,Final,18.8599853,77.5532849,nominatim_retry
+Chatri No. 19,Other,Ambala Talav,Ramtek,Nagpur,Final,18.8599853,77.5532849,nominatim_retry
+Chatri No. 24,Other,Ambala Talav,Ramtek,Nagpur,Final,18.8599853,77.5532849,nominatim_retry
+Chatri No. 26,Other,Ambala Talav,Ramtek,Nagpur,Final,18.8599853,77.5532849,nominatim_retry
+Jagannath Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Datta Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
 Datta Temple (Katol),Temple,Katol,Katol,Nagpur,Final,21.275182,78.58657,fallback
 Dharmashala No. 2951,Other,Ramtek,Ramtek,Nagpur,Final,21.395752,79.325747,fallback
 Nagardhan Fort,Fort,Nagardhan,Ramtek,Nagpur,Final,21.337096,79.315708,ok
-Panchashikhari Temple,Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
+Panchashikhari Temple,Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1450152,79.0514676,photon
 Purushottam Maharaj Temple,Temple,Katol,Nagpur,Nagpur,First,21.275182,78.58657,fallback
-Bhogram Temple,Temple,Gadmandir,Ramtek,Nagpur,First,,,failed
+Bhogram Temple,Temple,Gadmandir,Ramtek,Nagpur,First,21.1450152,79.0514676,photon
 Bholahudki Archaeological Site,Archaeological Site,Mandhal,Umred,Nagpur,Final,20.952294,79.461098,fallback
-Mahadev Temple No. 6 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Mahadev Temple No. 32 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Ranisaheb Samadhi,Other,Ambala,Ramtek,Nagpur,Final,,,failed
-Renuka Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,First,,,failed
-Rudra Narsimha Temple,Temple,Gadmandir,Ramtek,Nagpur,First,,,failed
+Mahadev Temple No. 6 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Mahadev Temple No. 32 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Ranisaheb Samadhi,Other,Ambala,Ramtek,Nagpur,Final,21.1390199,79.1038373,photon
+Renuka Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,First,21.1602594,79.1105515,place_photon_s1
+Rudra Narsimha Temple,Temple,Gadmandir,Ramtek,Nagpur,First,21.396153,79.3336385,photon
 Ram Ganesh Gadkari Monument,Other,Savner,Savner,Nagpur,Final,21.384709,78.918807,fallback
-Ram Temple (Bajargaon),Temple,Bajargaon,Nagpur,Nagpur,First,,,failed
-Ram Swami Temple,Temple,Gadmandir,Ramtek,Nagpur,First,,,failed
-Lakshman Swami Temple,Temple,Gadmandir,Ramtek,Nagpur,First,,,failed
-Varaha Temple (Gadmandir),Temple,Gadmandir,Ramtek,Nagpur,First,,,failed
-Shiva Temple (Bajargaon),Temple,Bajargaon,Nagpur,Nagpur,First,,,failed
-Shiva Temple No. 2 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Shiva Temple No. 5 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,First,,,failed
-Shiva Temple No. 7 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,First,,,failed
-Shiva Temple No. 9 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Shiva Temple No. 10 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Shiva Temple No. 11 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Shiva Temple No. 12 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Shiva Temple No. 17 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Shiva Temple No. 27 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Shiva Temple No. 30 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Shiva Temple No. 31 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
+Ram Temple (Bajargaon),Temple,Bajargaon,Nagpur,Nagpur,First,21.1457468,79.0875927,photon
+Ram Swami Temple,Temple,Gadmandir,Ramtek,Nagpur,First,21.1123503,79.1109713,photon
+Lakshman Swami Temple,Temple,Gadmandir,Ramtek,Nagpur,First,21.1123503,79.1109713,photon
+Varaha Temple (Gadmandir),Temple,Gadmandir,Ramtek,Nagpur,First,21.1498134,79.0820556,place_photon_s1
+Shiva Temple (Bajargaon),Temple,Bajargaon,Nagpur,Nagpur,First,21.1450152,79.0514676,photon
+Shiva Temple No. 2 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 5 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,First,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 7 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,First,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 9 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 10 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 11 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 12 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 17 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 27 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 30 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Shiva Temple No. 31 (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
 Saraswati Temple and Kund (Katol),Temple,Katol,Katol,Nagpur,Final,21.275182,78.58657,fallback
-Vitthal Temple (Mulmule),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Harihar Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,,,failed
-Harihar Samadhi Temple (Ambora),Other,Ambora,Kuhi,Nagpur,First,,,failed
+Vitthal Temple (Mulmule),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Harihar Temple (Ambala Talav),Temple,Ambala Talav,Ramtek,Nagpur,Final,21.1602594,79.1105515,place_photon_s1
+Harihar Samadhi Temple (Ambora),Other,Ambora,Kuhi,Nagpur,First,21.1498134,79.0820556,place_photon_s1
