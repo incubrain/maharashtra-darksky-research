@@ -86,6 +86,21 @@ KONKAN_COAST_LON = 73.5
 GBIF_SPECIES_API = "https://api.gbif.org/v1/species"
 GBIF_RATE_LIMIT_PER_SEC = 5  # Unauthenticated limit; we use conservative value
 
+# ─── iNATURALIST DATA ─────────────────────────────────────────────────────
+INATURALIST_DATA_DIR = "data/inaturalist"
+INATURALIST_RAW_CSV = "data/inaturalist/maharashtra_birds.csv"
+INATURALIST_MATCHED_CSV = "data/inaturalist/matched_species.csv"
+
+# Column mapping from iNaturalist export to our internal format.
+INATURALIST_COLUMNS = {
+    "latitude": "lat",
+    "longitude": "lon",
+    "scientific_name": "scientificName",
+    "common_name": "species",
+    "taxon_id": "inat_taxon_id",
+    "observed_on": "observed_on",
+}
+
 # ─── OUTPUT ─────────────────────────────────────────────────────────────────
 IUCN_LOOKUP_CSV = "data/ebird/iucn_species_lookup.csv"
 SPECIES_PROFILES_CSV = "data/ebird/species_monthly_profiles.csv"

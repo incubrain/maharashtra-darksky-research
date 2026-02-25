@@ -280,6 +280,97 @@ def plot_centroid_trails(
     print(f"  Saved: {out_path}")
 
 
+def _analyze_corridors(
+    migratory_in_cat: pd.DataFrame,
+    neighbor_profiles_df: pd.DataFrame,
+    profiles_df: pd.DataFrame,
+) -> dict:
+    """Analyze migration corridors between Maharashtra and neighboring states.
+
+    For each species, determines:
+    - Which neighboring states the species is observed in
+    - Whether the neighbor presence precedes (entry) or follows (exit) Maharashtra
+    - The observation strength (total obs count) in each neighbor
+
+    Returns a dict keyed by state name with entry/exit species lists and counts.
+    """
+    species_keys = set(migratory_in_cat["speciesKey"].astype(str))
+    state_names = {
+        "NW": "Gujarat", "N": "Madhya Pradesh", "NE": "Chhattisgarh",
+        "E": "Telangana", "SE": "Andhra Pradesh", "S": "Karnataka",
+        "SW": "Goa",
+    }
+
+    corridors = {}
+    for direction, state_label in state_names.items():
+        corridors[direction] = {
+            "state": state_label,
+            "entry_species": [],   # species arriving FROM this neighbor
+            "exit_species": [],    # species departing TO this neighbor
+            "total_obs": 0,        # total neighbor observation count
+        }
+
+    for sk in species_keys:
+        sk_str = str(sk)
+        sp_class = migratory_in_cat[migratory_in_cat["speciesKey"].astype(str) == sk_str]
+        if len(sp_class) == 0:
+            continue
+        row = sp_class.iloc[0]
+        mh_arrival = row.get("arrival_month")
+        mh_departure = row.get("departure_month")
+        species_name = row.get("species_name", row.get("species", sk_str))
+        if pd.isna(mh_arrival) or pd.isna(mh_departure):
+            continue
+        mh_arrival = int(mh_arrival)
+        mh_departure = int(mh_departure)
+
+        # Maharashtra presence months
+        sp_mh_months = set(
+            profiles_df[profiles_df["speciesKey"].astype(str) == sk_str]["month"].astype(int)
+        )
+
+        # Check each direction
+        sp_neighbors = neighbor_profiles_df[
+            neighbor_profiles_df["speciesKey"].astype(str) == sk_str
+        ]
+        for direction in corridors:
+            dir_data = sp_neighbors[sp_neighbors["direction"] == direction]
+            if len(dir_data) == 0:
+                continue
+
+            dir_months = set(dir_data["month"].astype(int))
+            dir_obs = int(dir_data["obs_count"].sum())
+            corridors[direction]["total_obs"] += dir_obs
+
+            # Entry: neighbor has species before Maharashtra arrival
+            # Check if neighbor months precede Maharashtra arrival
+            has_pre_arrival = False
+            for nm in dir_months:
+                diff = (mh_arrival - nm) % 12
+                if 1 <= diff <= 3:
+                    has_pre_arrival = True
+                    break
+
+            # Exit: neighbor has species after Maharashtra departure
+            has_post_departure = False
+            for nm in dir_months:
+                diff = (nm - mh_departure) % 12
+                if 1 <= diff <= 3:
+                    has_post_departure = True
+                    break
+
+            if has_pre_arrival:
+                corridors[direction]["entry_species"].append(
+                    (species_name, dir_obs)
+                )
+            if has_post_departure:
+                corridors[direction]["exit_species"].append(
+                    (species_name, dir_obs)
+                )
+
+    return corridors
+
+
 def plot_entry_exit(
     profiles_df: pd.DataFrame,
     neighbor_profiles_df: pd.DataFrame,
@@ -287,10 +378,12 @@ def plot_entry_exit(
     iucn_code: str,
     output_dir: str = MIGRATION_OUTPUT_DIR,
 ):
-    """Plot entry/exit flow arrows at Maharashtra borders.
+    """Plot migration corridor diagram showing flows between Maharashtra and neighbors.
 
-    For each migratory species, detects which neighboring state shows earlier
-    presence (entry direction) and later presence (exit direction).
+    Two-panel layout:
+    - Left: Map with flow arrows from neighboring states into/out of Maharashtra,
+      thickness proportional to species count, labeled with state names.
+    - Right: Corridor summary table showing species counts and key species per border.
     """
     cat_info = IUCN_CATEGORIES.get(iucn_code, {})
     label = cat_info.get("label", iucn_code)
@@ -305,127 +398,204 @@ def plot_entry_exit(
         print(f"  No entry/exit data for {iucn_code} — skipping")
         return
 
-    # Determine entry/exit directions
-    # Direction centroids for arrow placement
-    direction_coords = {
-        "NW": (72.8, 21.5), "N": (77.0, 22.0), "NE": (80.0, 21.0),
-        "E": (80.5, 19.0), "SE": (79.0, 16.5), "S": (76.0, 15.5),
-        "SW": (73.5, 16.0),
-    }
+    corridors = _analyze_corridors(migratory_in_cat, neighbor_profiles_df, profiles_df)
 
-    entry_counts = {}  # direction → count of species entering from there
-    exit_counts = {}
-
-    for sk in species_keys:
-        sk_str = str(sk)
-        # Maharashtra arrival/departure months
-        sp_class = migratory_in_cat[migratory_in_cat["speciesKey"].astype(str) == sk_str]
-        if len(sp_class) == 0:
-            continue
-        mh_arrival = sp_class.iloc[0].get("arrival_month")
-        mh_departure = sp_class.iloc[0].get("departure_month")
-        if pd.isna(mh_arrival) or pd.isna(mh_departure):
-            continue
-        mh_arrival = int(mh_arrival)
-        mh_departure = int(mh_departure)
-
-        # Check each neighbor for earlier/later presence
-        sp_neighbors = neighbor_profiles_df[
-            neighbor_profiles_df["speciesKey"].astype(str) == sk_str
-        ]
-        for _, nrow in sp_neighbors.iterrows():
-            direction = nrow.get("direction", "")
-            n_month = int(nrow["month"])
-
-            # Entry: neighbor has species 1-2 months before Maharashtra arrival
-            diff = (mh_arrival - n_month) % 12
-            if 1 <= diff <= 2:
-                entry_counts[direction] = entry_counts.get(direction, 0) + 1
-
-            # Exit: neighbor has species 1-2 months after Maharashtra departure
-            diff = (n_month - mh_departure) % 12
-            if 1 <= diff <= 2:
-                exit_counts[direction] = exit_counts.get(direction, 0) + 1
-
-    if not entry_counts and not exit_counts:
-        print(f"  No directional data for {iucn_code} — skipping")
+    # Check if any corridors have data
+    has_data = any(
+        c["entry_species"] or c["exit_species"]
+        for c in corridors.values()
+    )
+    if not has_data:
+        print(f"  No corridor data for {iucn_code} — skipping")
         return
 
     maha_gdf, region_gdf = _load_shapefiles()
 
-    fig, ax = plt.subplots(figsize=(14, 16))
+    fig = plt.figure(figsize=(22, 16))
     fig.patch.set_facecolor("#0d0d1a")
-    _setup_map(ax, maha_gdf, region_gdf,
-               title=f"Migration Entry/Exit: {label}")
+    fig.suptitle(
+        f"Migration Corridors: {label} ({len(species_keys)} migratory species)",
+        fontsize=15, color="white", y=0.97,
+    )
 
-    # Border midpoints: where the arrow meets Maharashtra's boundary.
-    # Each direction maps to a point on Maharashtra's actual border.
-    border_midpoints = {
-        "NW": (73.0, 21.2),   # Gujarat border (NW Maharashtra)
-        "N":  (77.0, 22.0),   # Madhya Pradesh border
-        "NE": (80.0, 21.0),   # Chhattisgarh border
-        "E":  (80.0, 19.5),   # Telangana border
-        "SE": (78.5, 17.0),   # Andhra Pradesh border
-        "S":  (75.5, 15.8),   # Karnataka border
-        "SW": (73.8, 16.0),   # Goa border
+    # Left panel: map with flow arrows
+    ax_map = fig.add_axes([0.02, 0.05, 0.58, 0.88])
+    _setup_map(ax_map, maha_gdf, region_gdf, title="")
+
+    # Points where arrows start (outside Maharashtra) and end (at border)
+    # Outer points sit in the neighboring state; border points sit on the edge
+    arrow_geometry = {
+        "NW": {"outer": (72.2, 22.0), "border": (73.3, 21.0), "label_pos": (72.0, 22.3)},
+        "N":  {"outer": (77.0, 23.0), "border": (77.0, 21.8), "label_pos": (77.0, 23.3)},
+        "NE": {"outer": (80.5, 21.8), "border": (79.8, 20.8), "label_pos": (80.8, 22.1)},
+        "E":  {"outer": (80.8, 19.0), "border": (79.8, 19.3), "label_pos": (81.2, 19.0)},
+        "SE": {"outer": (79.5, 16.3), "border": (78.2, 17.2), "label_pos": (79.8, 16.0)},
+        "S":  {"outer": (75.5, 15.0), "border": (75.5, 16.2), "label_pos": (75.5, 14.7)},
+        "SW": {"outer": (73.3, 15.2), "border": (73.8, 16.3), "label_pos": (73.0, 14.9)},
     }
 
-    max_count = max(
-        max(entry_counts.values(), default=0),
-        max(exit_counts.values(), default=0),
+    max_species = max(
+        max(len(c["entry_species"]) for c in corridors.values()),
+        max(len(c["exit_species"]) for c in corridors.values()),
         1,
     )
 
-    # Entry arrows (green): short arrows pointing inward from border
-    for direction, count in entry_counts.items():
-        if direction not in border_midpoints or direction not in direction_coords:
+    for direction, corridor in corridors.items():
+        geom = arrow_geometry.get(direction)
+        if geom is None:
             continue
-        bx, by = border_midpoints[direction]
-        ox, oy = direction_coords[direction]
-        width = 1 + 4 * (count / max_count)
-        ax.annotate(
-            "", xy=(bx, by), xytext=(ox, oy),
-            arrowprops=dict(
-                arrowstyle="-|>", color="#2ecc71",
-                lw=width, alpha=0.7,
-            ),
-            zorder=4,
-        )
-        ax.text(ox, oy + 0.3, f"IN: {count}", fontsize=9, color="#2ecc71",
-                ha="center", va="center", fontweight="bold",
-                bbox=dict(facecolor="#1a1a2e", edgecolor="#2ecc71",
-                          boxstyle="round,pad=0.3", alpha=0.9),
-                zorder=5)
 
-    # Exit arrows (orange): short arrows pointing outward from border
-    for direction, count in exit_counts.items():
-        if direction not in border_midpoints or direction not in direction_coords:
-            continue
-        bx, by = border_midpoints[direction]
-        ox, oy = direction_coords[direction]
-        width = 1 + 4 * (count / max_count)
-        # Slight offset to avoid overlap with entry arrows
-        off = 0.25
-        ax.annotate(
-            "", xy=(ox, oy - off), xytext=(bx, by - off),
-            arrowprops=dict(
-                arrowstyle="-|>", color="#e67e22",
-                lw=width, alpha=0.7,
-            ),
-            zorder=4,
-        )
-        ax.text(ox, oy - 0.3, f"OUT: {count}", fontsize=9, color="#e67e22",
-                ha="center", va="center", fontweight="bold",
-                bbox=dict(facecolor="#1a1a2e", edgecolor="#e67e22",
-                          boxstyle="round,pad=0.3", alpha=0.9),
-                zorder=5)
+        n_entry = len(corridor["entry_species"])
+        n_exit = len(corridor["exit_species"])
+        state = corridor["state"]
+        ox, oy = geom["outer"]
+        bx, by = geom["border"]
+        lx, ly = geom["label_pos"]
 
-    # Legend
+        # State name label
+        ax_map.text(
+            lx, ly, state, fontsize=9, color="#cccccc",
+            ha="center", va="center", fontweight="bold",
+            bbox=dict(facecolor="#1a1a2e", edgecolor="#666666",
+                      boxstyle="round,pad=0.4", alpha=0.95),
+            zorder=6,
+        )
+
+        # Entry arrow (green): outer → border
+        if n_entry > 0:
+            width = 1.0 + 4.0 * (n_entry / max_species)
+            # Offset entry arrow slightly to one side
+            perp_x = -(by - oy) * 0.03
+            perp_y = (bx - ox) * 0.03
+            ax_map.annotate(
+                "", xy=(bx + perp_x, by + perp_y),
+                xytext=(ox + perp_x, oy + perp_y),
+                arrowprops=dict(
+                    arrowstyle="-|>", color="#2ecc71",
+                    lw=width, alpha=0.8,
+                    mutation_scale=15,
+                ),
+                zorder=4,
+            )
+            # Count badge near the border end
+            mid_x = (ox + bx) / 2 + perp_x * 3
+            mid_y = (oy + by) / 2 + perp_y * 3
+            ax_map.text(
+                mid_x, mid_y, str(n_entry), fontsize=8, color="#2ecc71",
+                ha="center", va="center", fontweight="bold",
+                bbox=dict(facecolor="#0d0d1a", edgecolor="#2ecc71",
+                          boxstyle="circle,pad=0.3", alpha=0.95),
+                zorder=5,
+            )
+
+        # Exit arrow (orange): border → outer
+        if n_exit > 0:
+            width = 1.0 + 4.0 * (n_exit / max_species)
+            perp_x = (by - oy) * 0.03
+            perp_y = -(bx - ox) * 0.03
+            ax_map.annotate(
+                "", xy=(ox + perp_x, oy + perp_y),
+                xytext=(bx + perp_x, by + perp_y),
+                arrowprops=dict(
+                    arrowstyle="-|>", color="#e67e22",
+                    lw=width, alpha=0.8,
+                    mutation_scale=15,
+                ),
+                zorder=4,
+            )
+            mid_x = (ox + bx) / 2 + perp_x * 3
+            mid_y = (oy + by) / 2 + perp_y * 3
+            ax_map.text(
+                mid_x, mid_y, str(n_exit), fontsize=8, color="#e67e22",
+                ha="center", va="center", fontweight="bold",
+                bbox=dict(facecolor="#0d0d1a", edgecolor="#e67e22",
+                          boxstyle="circle,pad=0.3", alpha=0.95),
+                zorder=5,
+            )
+
+    # Map legend
     entry_patch = mpatches.Patch(color="#2ecc71", label="Entry (from neighbor)")
     exit_patch = mpatches.Patch(color="#e67e22", label="Exit (to neighbor)")
-    ax.legend(handles=[entry_patch, exit_patch], loc="lower right",
-              facecolor="#1a1a2e", edgecolor="#555555", labelcolor="white",
-              fontsize=9)
+    ax_map.legend(
+        handles=[entry_patch, exit_patch], loc="lower left",
+        facecolor="#1a1a2e", edgecolor="#555555", labelcolor="white",
+        fontsize=9,
+    )
+
+    # Right panel: corridor summary table
+    ax_table = fig.add_axes([0.62, 0.05, 0.36, 0.88])
+    ax_table.set_facecolor("#0d0d1a")
+    ax_table.set_xlim(0, 1)
+    ax_table.set_ylim(0, 1)
+    ax_table.axis("off")
+
+    ax_table.text(
+        0.5, 0.97, "Corridor Details", fontsize=13, color="white",
+        ha="center", va="top", fontweight="bold",
+    )
+
+    # Sort directions by total activity (entry + exit species)
+    sorted_dirs = sorted(
+        corridors.items(),
+        key=lambda kv: len(kv[1]["entry_species"]) + len(kv[1]["exit_species"]),
+        reverse=True,
+    )
+
+    y = 0.92
+    for direction, corridor in sorted_dirs:
+        n_entry = len(corridor["entry_species"])
+        n_exit = len(corridor["exit_species"])
+        if n_entry == 0 and n_exit == 0:
+            continue
+
+        state = corridor["state"]
+        total_obs = corridor["total_obs"]
+
+        # State header
+        ax_table.text(
+            0.05, y, f"{state} ({direction})", fontsize=11, color="white",
+            fontweight="bold", va="top",
+        )
+        ax_table.text(
+            0.95, y, f"{total_obs:,} obs", fontsize=9, color="#888888",
+            ha="right", va="top",
+        )
+        y -= 0.025
+
+        # Entry species
+        if n_entry > 0:
+            ax_table.text(
+                0.08, y, f"Entry: {n_entry} species", fontsize=9,
+                color="#2ecc71", va="top",
+            )
+            y -= 0.02
+            # Top 3 species by observation count
+            top_entry = sorted(corridor["entry_species"], key=lambda x: x[1], reverse=True)[:3]
+            for name, obs in top_entry:
+                display_name = name if len(name) <= 30 else name[:28] + "..."
+                ax_table.text(
+                    0.12, y, f"• {display_name} ({obs:,})", fontsize=8,
+                    color="#aaaaaa", va="top", style="italic",
+                )
+                y -= 0.018
+
+        # Exit species
+        if n_exit > 0:
+            ax_table.text(
+                0.08, y, f"Exit: {n_exit} species", fontsize=9,
+                color="#e67e22", va="top",
+            )
+            y -= 0.02
+            top_exit = sorted(corridor["exit_species"], key=lambda x: x[1], reverse=True)[:3]
+            for name, obs in top_exit:
+                display_name = name if len(name) <= 30 else name[:28] + "..."
+                ax_table.text(
+                    0.12, y, f"• {display_name} ({obs:,})", fontsize=8,
+                    color="#aaaaaa", va="top", style="italic",
+                )
+                y -= 0.018
+
+        y -= 0.015  # gap between states
 
     os.makedirs(output_dir, exist_ok=True)
     out_path = os.path.join(output_dir, f"migration_entry_exit_{iucn_code}.png")

@@ -357,8 +357,25 @@ def extract_observation_points(
     sampled = pd.concat(sampled_parts, ignore_index=True)
     del all_obs, sampled_parts  # free memory
 
-    print(f"  Observation points: {len(sampled):,} rows "
+    print(f"  eBird observation points: {len(sampled):,} rows "
           f"({sampled['speciesKey'].nunique()} species)")
+
+    # Merge iNaturalist observations if available
+    try:
+        from src.migration.inaturalist import run_inaturalist_pipeline
+        inat_obs = run_inaturalist_pipeline()
+        if inat_obs is not None and len(inat_obs) > 0:
+            # Add source column to eBird data for tracking
+            sampled["source"] = "ebird"
+            # Keep only columns in common
+            common_cols = ["speciesKey", "month", "lat", "lon", "source"]
+            inat_obs = inat_obs[[c for c in common_cols if c in inat_obs.columns]]
+            sampled = pd.concat([sampled, inat_obs], ignore_index=True)
+            print(f"  Combined total: {len(sampled):,} rows "
+                  f"({sampled['speciesKey'].nunique()} species)")
+    except Exception as e:
+        print(f"  iNaturalist merge skipped: {e}")
+
     return sampled
 
 
