@@ -21,10 +21,12 @@ from src.migration.constants import (
     IUCN_LOOKUP_CSV,
     KONKAN_COAST_LON,
     MAHARASHTRA_EBIRD_FILE,
+    MAX_OBS_PER_SPECIES_MONTH,
     MIN_MONTHS_PRESENT,
     MIN_OBS_PER_MONTH,
     NEIGHBORING_STATES,
     NEIGHBOR_PROFILES_CSV,
+    OBSERVATION_POINTS_CSV,
     RESIDENT_MONTHS_THRESHOLD,
     SPECIES_CLASSIFICATION_CSV,
     SPECIES_PROFILES_CSV,
@@ -298,6 +300,68 @@ def enrich_classification(
     return merged
 
 
+def extract_observation_points(
+    data_dir: str = EBIRD_DATA_DIR,
+    max_per_species_month: int = MAX_OBS_PER_SPECIES_MONTH,
+) -> pd.DataFrame:
+    """Extract individual observation lat/lon points for KDE heatmaps.
+
+    Instead of just species centroids, this preserves the spatial distribution
+    of observations. Samples up to `max_per_species_month` observations per
+    species per month to keep the dataset manageable.
+
+    Returns DataFrame with columns:
+        speciesKey, month, lat, lon
+    """
+    filepath = os.path.join(data_dir, MAHARASHTRA_EBIRD_FILE)
+    usecols = ["speciesKey", "decimalLatitude", "decimalLongitude", "month"]
+
+    print(f"  Extracting observation points from {MAHARASHTRA_EBIRD_FILE}...")
+
+    # Collect all observations grouped by (speciesKey, month)
+    # Use reservoir sampling to cap at max_per_species_month
+    import random
+    random.seed(42)
+
+    # Accumulate chunks into a single dataframe of (speciesKey, month, lat, lon)
+    chunks = []
+    total_rows = 0
+    for chunk in pd.read_csv(
+        filepath, sep="\t", compression="gzip",
+        usecols=usecols, chunksize=EBIRD_CHUNK_SIZE,
+        dtype={"speciesKey": str},
+    ):
+        chunk = chunk.dropna(subset=["decimalLatitude", "decimalLongitude", "month"])
+        chunk["month"] = chunk["month"].astype(int)
+        chunk = chunk.rename(columns={
+            "decimalLatitude": "lat", "decimalLongitude": "lon",
+        })
+        chunks.append(chunk[["speciesKey", "month", "lat", "lon"]])
+        total_rows += len(chunk)
+        if total_rows % 2_000_000 == 0:
+            print(f"    {total_rows:,} rows read...", flush=True)
+
+    print(f"    Total: {total_rows:,} rows read")
+
+    # Concatenate and sample
+    all_obs = pd.concat(chunks, ignore_index=True)
+    del chunks  # free memory
+
+    print(f"    Sampling to max {max_per_species_month} per species-month...")
+    sampled_parts = []
+    for _, grp in all_obs.groupby(["speciesKey", "month"]):
+        if len(grp) <= max_per_species_month:
+            sampled_parts.append(grp)
+        else:
+            sampled_parts.append(grp.sample(n=max_per_species_month, random_state=42))
+    sampled = pd.concat(sampled_parts, ignore_index=True)
+    del all_obs, sampled_parts  # free memory
+
+    print(f"  Observation points: {len(sampled):,} rows "
+          f"({sampled['speciesKey'].nunique()} species)")
+    return sampled
+
+
 def run_profiling_pipeline(
     data_dir: str = EBIRD_DATA_DIR,
     skip_neighbors: bool = False,
@@ -320,6 +384,12 @@ def run_profiling_pipeline(
     classification_df = enrich_classification(classification_df)
     classification_df.to_csv(SPECIES_CLASSIFICATION_CSV, index=False)
     print(f"  Saved: {SPECIES_CLASSIFICATION_CSV}")
+
+    # Step D: Observation-level points for KDE heatmaps
+    print("\n=== Step D: Observation Points for Heatmaps ===")
+    obs_df = extract_observation_points(data_dir)
+    obs_df.to_csv(OBSERVATION_POINTS_CSV, index=False, compression="gzip")
+    print(f"  Saved: {OBSERVATION_POINTS_CSV}")
 
     # Step C: Neighboring state context
     if not skip_neighbors:

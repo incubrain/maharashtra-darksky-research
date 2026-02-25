@@ -30,6 +30,7 @@ from src.migration.constants import (
     MIGRATION_OUTPUT_DIR,
     MIGRATION_SEASONS,
     NEIGHBORING_STATES,
+    OBSERVATION_POINTS_CSV,
     REGION_SHAPEFILE,
     THREATENED_CODES,
 )
@@ -88,17 +89,21 @@ def _setup_map(ax, maha_gdf, region_gdf=None, title=""):
 
 
 def plot_monthly_heatmaps(
-    profiles_df: pd.DataFrame,
+    obs_points_df: pd.DataFrame,
     classification_df: pd.DataFrame,
     iucn_code: str,
     output_dir: str = MIGRATION_OUTPUT_DIR,
 ):
     """Generate 12-panel monthly KDE heatmap for one IUCN category.
 
+    Uses individual observation lat/lon points (not species centroids) so the
+    heatmap reflects actual spatial distribution across Maharashtra, not just
+    the mean location of each species.
+
     Parameters
     ----------
-    profiles_df : pd.DataFrame
-        Monthly species profiles (speciesKey, month, obs_count, mean_lat, mean_lon).
+    obs_points_df : pd.DataFrame
+        Individual observation points (speciesKey, month, lat, lon).
     classification_df : pd.DataFrame
         Species classification with iucn_code column.
     iucn_code : str
@@ -115,19 +120,23 @@ def plot_monthly_heatmaps(
         classification_df[classification_df["iucn_code"] == iucn_code]["speciesKey"]
         .astype(str)
     )
-    cat_profiles = profiles_df[profiles_df["speciesKey"].astype(str).isin(species_in_cat)]
+    cat_obs = obs_points_df[obs_points_df["speciesKey"].astype(str).isin(species_in_cat)]
 
-    if len(cat_profiles) == 0:
+    if len(cat_obs) == 0:
         print(f"  No data for {iucn_code} ({label}) — skipping heatmap")
         return
 
-    n_species = cat_profiles["speciesKey"].nunique()
+    n_species = cat_obs["speciesKey"].nunique()
+    n_obs = len(cat_obs)
     maha_gdf, region_gdf = _load_shapefiles()
 
     fig, axes = plt.subplots(3, 4, figsize=(20, 16))
     fig.patch.set_facecolor("#0d0d1a")
-    fig.suptitle(f"Monthly Bird Density: {label} Species (n={n_species})",
-                 fontsize=16, color="white", y=0.98)
+    fig.suptitle(
+        f"Monthly Bird Density: {label} Species "
+        f"(n={n_species} species, {n_obs:,} observations)",
+        fontsize=14, color="white", y=0.98,
+    )
 
     for month_idx in range(12):
         month = month_idx + 1
@@ -135,37 +144,40 @@ def plot_monthly_heatmaps(
 
         _setup_map(ax, maha_gdf, region_gdf, title=MONTH_NAMES[month])
 
-        month_data = cat_profiles[cat_profiles["month"] == month]
-        if len(month_data) < 3:
+        month_data = cat_obs[cat_obs["month"] == month]
+        if len(month_data) < 10:
             ax.text(
-                0.5, 0.5, "< 3 obs", transform=ax.transAxes,
+                0.5, 0.5, f"n={len(month_data)}", transform=ax.transAxes,
                 ha="center", va="center", fontsize=10, color="#666666",
             )
             continue
 
-        lons = month_data["mean_lon"].values
-        lats = month_data["mean_lat"].values
-        weights = month_data["obs_count"].values.astype(float)
+        lons = month_data["lon"].values
+        lats = month_data["lat"].values
 
-        # KDE on species centroids weighted by observation count
+        # KDE on actual observation locations
         try:
             coords = np.vstack([lons, lats])
-            kde = gaussian_kde(coords, weights=weights, bw_method=0.3)
+            kde = gaussian_kde(coords, bw_method=0.15)
 
             # Evaluate on grid
-            xi = np.linspace(REGION_EXTENT["west"], REGION_EXTENT["east"], 200)
-            yi = np.linspace(REGION_EXTENT["south"], REGION_EXTENT["north"], 200)
+            xi = np.linspace(REGION_EXTENT["west"], REGION_EXTENT["east"], 250)
+            yi = np.linspace(REGION_EXTENT["south"], REGION_EXTENT["north"], 250)
             xx, yy = np.meshgrid(xi, yi)
             zi = kde(np.vstack([xx.ravel(), yy.ravel()])).reshape(xx.shape)
 
             ax.contourf(
-                xx, yy, zi, levels=15, cmap="plasma", alpha=0.7,
-                extent=[REGION_EXTENT["west"], REGION_EXTENT["east"],
-                        REGION_EXTENT["south"], REGION_EXTENT["north"]],
+                xx, yy, zi, levels=20, cmap="plasma", alpha=0.7,
             )
         except np.linalg.LinAlgError:
             # Singular matrix — all points at same location
-            ax.scatter(lons, lats, s=10, c=color, alpha=0.5, zorder=3)
+            ax.scatter(lons, lats, s=5, c=color, alpha=0.3, zorder=3)
+
+        # Add observation count annotation
+        ax.text(
+            0.98, 0.02, f"n={len(month_data):,}", transform=ax.transAxes,
+            ha="right", va="bottom", fontsize=7, color="#aaaaaa",
+        )
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     os.makedirs(output_dir, exist_ok=True)
@@ -346,9 +358,17 @@ def plot_entry_exit(
     _setup_map(ax, maha_gdf, region_gdf,
                title=f"Migration Entry/Exit: {label}")
 
-    # Maharashtra centroid for arrow targets
-    mh_centroid = maha_gdf.dissolve().centroid.iloc[0]
-    cx, cy = mh_centroid.x, mh_centroid.y
+    # Border midpoints: where the arrow meets Maharashtra's boundary.
+    # Each direction maps to a point on Maharashtra's actual border.
+    border_midpoints = {
+        "NW": (73.0, 21.2),   # Gujarat border (NW Maharashtra)
+        "N":  (77.0, 22.0),   # Madhya Pradesh border
+        "NE": (80.0, 21.0),   # Chhattisgarh border
+        "E":  (80.0, 19.5),   # Telangana border
+        "SE": (78.5, 17.0),   # Andhra Pradesh border
+        "S":  (75.5, 15.8),   # Karnataka border
+        "SW": (73.8, 16.0),   # Goa border
+    }
 
     max_count = max(
         max(entry_counts.values(), default=0),
@@ -356,46 +376,46 @@ def plot_entry_exit(
         1,
     )
 
-    # Entry arrows (green, pointing inward)
+    # Entry arrows (green): short arrows pointing inward from border
     for direction, count in entry_counts.items():
-        if direction not in direction_coords:
+        if direction not in border_midpoints or direction not in direction_coords:
             continue
+        bx, by = border_midpoints[direction]
         ox, oy = direction_coords[direction]
         width = 1 + 4 * (count / max_count)
         ax.annotate(
-            "", xy=(cx, cy), xytext=(ox, oy),
+            "", xy=(bx, by), xytext=(ox, oy),
             arrowprops=dict(
                 arrowstyle="-|>", color="#2ecc71",
                 lw=width, alpha=0.7,
             ),
             zorder=4,
         )
-        ax.text(ox, oy, f"IN: {count}", fontsize=8, color="#2ecc71",
-                ha="center", va="center",
+        ax.text(ox, oy + 0.3, f"IN: {count}", fontsize=9, color="#2ecc71",
+                ha="center", va="center", fontweight="bold",
                 bbox=dict(facecolor="#1a1a2e", edgecolor="#2ecc71",
                           boxstyle="round,pad=0.3", alpha=0.9),
                 zorder=5)
 
-    # Exit arrows (orange, pointing outward)
+    # Exit arrows (orange): short arrows pointing outward from border
     for direction, count in exit_counts.items():
-        if direction not in direction_coords:
+        if direction not in border_midpoints or direction not in direction_coords:
             continue
+        bx, by = border_midpoints[direction]
         ox, oy = direction_coords[direction]
         width = 1 + 4 * (count / max_count)
-        # Offset slightly to avoid overlap with entry arrows
-        offset_x = (ox - cx) * 0.05
-        offset_y = (oy - cy) * 0.05
+        # Slight offset to avoid overlap with entry arrows
+        off = 0.25
         ax.annotate(
-            "", xy=(ox + offset_x, oy + offset_y),
-            xytext=(cx + offset_x, cy + offset_y),
+            "", xy=(ox, oy - off), xytext=(bx, by - off),
             arrowprops=dict(
                 arrowstyle="-|>", color="#e67e22",
                 lw=width, alpha=0.7,
             ),
             zorder=4,
         )
-        ax.text(ox + offset_x, oy - 0.4, f"OUT: {count}", fontsize=8,
-                color="#e67e22", ha="center", va="center",
+        ax.text(ox, oy - 0.3, f"OUT: {count}", fontsize=9, color="#e67e22",
+                ha="center", va="center", fontweight="bold",
                 bbox=dict(facecolor="#1a1a2e", edgecolor="#e67e22",
                           boxstyle="round,pad=0.3", alpha=0.9),
                 zorder=5)
@@ -523,6 +543,7 @@ def run_all_visualizations(
     profiles_df: pd.DataFrame,
     classification_df: pd.DataFrame,
     neighbor_profiles_df: pd.DataFrame | None = None,
+    obs_points_df: pd.DataFrame | None = None,
     output_dir: str = MIGRATION_OUTPUT_DIR,
     categories: list[str] | None = None,
 ):
@@ -531,11 +552,14 @@ def run_all_visualizations(
     Parameters
     ----------
     profiles_df : pd.DataFrame
-        Monthly species profiles.
+        Monthly species profiles (centroids).
     classification_df : pd.DataFrame
         Species classification with iucn_code.
     neighbor_profiles_df : pd.DataFrame or None
         Neighboring state profiles (for entry/exit maps).
+    obs_points_df : pd.DataFrame or None
+        Individual observation points (for KDE heatmaps). If None, loads
+        from OBSERVATION_POINTS_CSV.
     output_dir : str
         Output directory for PNG files.
     categories : list of str or None
@@ -550,12 +574,27 @@ def run_all_visualizations(
         else:
             categories = []
 
+    # Load observation points for heatmaps
+    if obs_points_df is None:
+        obs_path = OBSERVATION_POINTS_CSV
+        if os.path.isfile(obs_path):
+            print(f"Loading observation points from {obs_path}...")
+            obs_points_df = pd.read_csv(
+                obs_path, compression="gzip", dtype={"speciesKey": str},
+            )
+            print(f"  {len(obs_points_df):,} observation points loaded")
+        else:
+            print(f"  WARNING: {obs_path} not found — heatmaps will use centroids")
+
     print(f"\nGenerating visualizations for categories: {categories}")
 
-    # Map A: Monthly heatmaps
+    # Map A: Monthly heatmaps (from observation points)
     print("\n=== Map A: Monthly Migration Heatmaps ===")
-    for code in categories:
-        plot_monthly_heatmaps(profiles_df, classification_df, code, output_dir)
+    if obs_points_df is not None:
+        for code in categories:
+            plot_monthly_heatmaps(obs_points_df, classification_df, code, output_dir)
+    else:
+        print("  Skipped — no observation points available")
 
     # Map B: Centroid trails
     print("\n=== Map B: Centroid Migration Trails ===")

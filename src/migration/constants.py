@@ -91,5 +91,10 @@ IUCN_LOOKUP_CSV = "data/ebird/iucn_species_lookup.csv"
 SPECIES_PROFILES_CSV = "data/ebird/species_monthly_profiles.csv"
 SPECIES_CLASSIFICATION_CSV = "data/ebird/species_classification.csv"
 NEIGHBOR_PROFILES_CSV = "data/ebird/neighbor_monthly_profiles.csv"
+OBSERVATION_POINTS_CSV = "data/ebird/observation_points.csv.gz"
 REGION_SHAPEFILE = "data/shapefiles/maharashtra_region.geojson"
 MIGRATION_OUTPUT_DIR = "outputs/ebird"
+
+# Maximum observation points to sample per species per month for KDE heatmaps.
+# Keeps the observation_points file manageable (~2-3M rows instead of 6.5M).
+MAX_OBS_PER_SPECIES_MONTH = 500
