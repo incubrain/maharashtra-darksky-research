@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import Normalize
 from scipy.stats import gaussian_kde
+from shapely.geometry import LineString, Point
 
 from src.migration.constants import (
     IUCN_CATEGORIES,
@@ -422,17 +423,43 @@ def plot_entry_exit(
     ax_map = fig.add_axes([0.02, 0.05, 0.58, 0.88])
     _setup_map(ax_map, maha_gdf, region_gdf, title="")
 
-    # Points where arrows start (outside Maharashtra) and end (at border)
-    # Outer points sit in the neighboring state; border points sit on the edge
-    arrow_geometry = {
-        "NW": {"outer": (72.2, 22.0), "border": (73.3, 21.0), "label_pos": (72.0, 22.3)},
-        "N":  {"outer": (77.0, 23.0), "border": (77.0, 21.8), "label_pos": (77.0, 23.3)},
-        "NE": {"outer": (80.5, 21.8), "border": (79.8, 20.8), "label_pos": (80.8, 22.1)},
-        "E":  {"outer": (80.8, 19.0), "border": (79.8, 19.3), "label_pos": (81.2, 19.0)},
-        "SE": {"outer": (79.5, 16.3), "border": (78.2, 17.2), "label_pos": (79.8, 16.0)},
-        "S":  {"outer": (75.5, 15.0), "border": (75.5, 16.2), "label_pos": (75.5, 14.7)},
-        "SW": {"outer": (73.3, 15.2), "border": (73.8, 16.3), "label_pos": (73.0, 14.9)},
+    # Compute arrow geometry from actual Maharashtra boundary.
+    # For each direction, cast a ray from the centroid and find the border
+    # intersection point, then place outer/label points beyond it.
+    import warnings
+    maha_dissolved = maha_gdf.dissolve()
+    boundary = maha_dissolved.geometry.iloc[0].boundary
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mh_centroid = maha_dissolved.centroid.iloc[0]
+    mcx, mcy = mh_centroid.x, mh_centroid.y
+
+    direction_vectors = {
+        "NW": (-1.0, 0.7), "N": (0.0, 1.0), "NE": (1.0, 0.7),
+        "E": (1.0, 0.0), "SE": (0.7, -0.8), "S": (0.0, -1.0),
+        "SW": (-0.3, -0.9),
     }
+
+    arrow_geometry = {}
+    for d, (dx, dy) in direction_vectors.items():
+        mag = np.sqrt(dx**2 + dy**2)
+        udx, udy = dx / mag, dy / mag
+        ray = LineString([(mcx, mcy), (mcx + udx * 10, mcy + udy * 10)])
+        hit = ray.intersection(boundary)
+        if hit.is_empty:
+            continue
+        if hit.geom_type == "MultiPoint":
+            pt = min(hit.geoms, key=lambda p: p.distance(Point(mcx, mcy)))
+            bx, by = pt.x, pt.y
+        elif hit.geom_type == "Point":
+            bx, by = hit.x, hit.y
+        else:
+            bx, by = list(hit.coords)[0]
+        arrow_geometry[d] = {
+            "border": (bx, by),
+            "outer": (bx + udx * 1.2, by + udy * 1.2),
+            "label_pos": (bx + udx * 1.8, by + udy * 1.8),
+        }
 
     max_species = max(
         max(len(c["entry_species"]) for c in corridors.values()),
