@@ -193,12 +193,17 @@ def plot_centroid_trails(
     profiles_df: pd.DataFrame,
     classification_df: pd.DataFrame,
     iucn_code: str,
+    neighbor_profiles_df: pd.DataFrame | None = None,
     output_dir: str = MIGRATION_OUTPUT_DIR,
 ):
     """Plot monthly centroid migration trails for migratory species.
 
-    Shows the weighted centroid position for each month connected by arrows.
-    Color encodes month (blue=Jan → red=Dec).
+    Combines Maharashtra centroids with neighboring state centroids to show
+    the full migration path — where species come from, their movement within
+    Maharashtra, and where they head afterwards.
+
+    Color encodes month (blue=Jan → red=Dec). Maharashtra points are solid;
+    neighbor state points are shown as diamonds with lower opacity.
     """
     cat_info = IUCN_CATEGORIES.get(iucn_code, {})
     label = cat_info.get("label", iucn_code)
@@ -215,6 +220,19 @@ def plot_centroid_trails(
         print(f"  No migratory species for {iucn_code} — skipping trails")
         return
 
+    # Build combined centroid table: Maharashtra + neighbor states
+    # Maharashtra rows get region="Maharashtra"
+    mh_data = cat_profiles[["speciesKey", "month", "mean_lat", "mean_lon", "obs_count"]].copy()
+    mh_data["region"] = "Maharashtra"
+
+    combined = mh_data
+    if neighbor_profiles_df is not None and len(neighbor_profiles_df) > 0:
+        nb = neighbor_profiles_df[
+            neighbor_profiles_df["speciesKey"].astype(str).isin(species_keys)
+        ][["speciesKey", "month", "mean_lat", "mean_lon", "obs_count", "state"]].copy()
+        nb = nb.rename(columns={"state": "region"})
+        combined = pd.concat([mh_data, nb], ignore_index=True)
+
     maha_gdf, region_gdf = _load_shapefiles()
 
     fig, ax = plt.subplots(figsize=(14, 16))
@@ -226,30 +244,68 @@ def plot_centroid_trails(
     cmap = plt.cm.coolwarm
     norm = Normalize(vmin=1, vmax=12)
 
+    n_with_trail = 0
     for sk in species_keys:
-        sp_data = cat_profiles[cat_profiles["speciesKey"].astype(str) == sk].sort_values("month")
-        if len(sp_data) < 2:
+        # Get all centroids for this species across all regions, sorted by month
+        sp_all = combined[combined["speciesKey"].astype(str) == sk].copy()
+
+        # For each month, pick the single best centroid:
+        # If a species is observed in both Maharashtra and a neighbor in the
+        # same month, average the centroids weighted by obs_count to get one
+        # position per month. But keep the region info for styling.
+        monthly = []
+        for m, grp in sp_all.groupby("month"):
+            total_obs = grp["obs_count"].sum()
+            w_lat = (grp["mean_lat"] * grp["obs_count"]).sum() / total_obs
+            w_lon = (grp["mean_lon"] * grp["obs_count"]).sum() / total_obs
+            in_maha = "Maharashtra" in grp["region"].values
+            monthly.append({
+                "month": int(m), "lat": w_lat, "lon": w_lon,
+                "obs_count": total_obs, "in_maharashtra": in_maha,
+            })
+
+        if len(monthly) < 2:
             continue
 
-        months = sp_data["month"].values
-        lons = sp_data["mean_lon"].values
-        lats = sp_data["mean_lat"].values
-        sizes = np.clip(sp_data["obs_count"].values / 10, 5, 50)
+        # Sort by month with wrap-around awareness.
+        # Use the arrival month from classification to determine the start.
+        sp_class = migratory_in_cat[migratory_in_cat["speciesKey"].astype(str) == sk]
+        arrival = sp_class.iloc[0].get("arrival_month") if len(sp_class) > 0 else None
+        if pd.notna(arrival):
+            arrival = int(arrival)
+            # Rotate months so the trail starts from the arrival month
+            monthly.sort(key=lambda r: (r["month"] - arrival) % 12)
+        else:
+            monthly.sort(key=lambda r: r["month"])
 
-        # Plot points
+        months = [r["month"] for r in monthly]
+        lons = [r["lon"] for r in monthly]
+        lats = [r["lat"] for r in monthly]
+        in_mh = [r["in_maharashtra"] for r in monthly]
+        obs = [r["obs_count"] for r in monthly]
+        sizes = np.clip(np.array(obs) / 10, 5, 50)
+
+        n_with_trail += 1
+
+        # Plot points: circles for Maharashtra, diamonds for outside
         for i in range(len(months)):
-            ax.scatter(lons[i], lats[i], s=sizes[i], c=[cmap(norm(months[i]))],
-                       alpha=0.4, zorder=3, edgecolors="none")
+            marker = "o" if in_mh[i] else "D"
+            alpha = 0.5 if in_mh[i] else 0.3
+            edge = "none" if in_mh[i] else "#ffffff"
+            edge_w = 0 if in_mh[i] else 0.3
+            ax.scatter(
+                lons[i], lats[i], s=sizes[i], c=[cmap(norm(months[i]))],
+                alpha=alpha, zorder=3, marker=marker,
+                edgecolors=edge, linewidths=edge_w,
+            )
 
         # Draw arrows between consecutive months
         for i in range(len(months) - 1):
-            dx = lons[i+1] - lons[i]
-            dy = lats[i+1] - lats[i]
             ax.annotate(
                 "", xy=(lons[i+1], lats[i+1]), xytext=(lons[i], lats[i]),
                 arrowprops=dict(
                     arrowstyle="->", color=cmap(norm(months[i])),
-                    alpha=0.3, lw=0.8,
+                    alpha=0.35, lw=0.9,
                 ),
                 zorder=2,
             )
@@ -264,10 +320,26 @@ def plot_centroid_trails(
     cbar.set_label("Month", color="white", fontsize=10)
 
     # Legend
-    n_species = len(species_keys)
+    mh_dot = plt.Line2D(
+        [0], [0], marker="o", color="w", markerfacecolor="#888888",
+        markersize=8, linestyle="None", label="Maharashtra centroid",
+    )
+    nb_dot = plt.Line2D(
+        [0], [0], marker="D", color="w", markerfacecolor="#888888",
+        markeredgecolor="#ffffff", markeredgewidth=0.5,
+        markersize=7, linestyle="None", label="Neighbor state centroid",
+    )
+    ax.legend(
+        handles=[mh_dot, nb_dot], loc="lower left",
+        facecolor="#1a1a2e", edgecolor="#555555", labelcolor="white",
+        fontsize=9,
+    )
+
     ax.text(
-        0.02, 0.02,
-        f"{n_species} migratory species\nArrows: monthly centroid movement",
+        0.02, 0.08,
+        f"{n_with_trail} migratory species\n"
+        f"Arrows: monthly centroid movement\n"
+        f"Color: month (blue=Jan → red=Dec)",
         transform=ax.transAxes, fontsize=9, color="#aaaaaa",
         verticalalignment="bottom",
         bbox=dict(boxstyle="round,pad=0.3", facecolor="#1a1a2e", edgecolor="#555555"),
@@ -793,10 +865,14 @@ def run_all_visualizations(
     else:
         print("  Skipped — no observation points available")
 
-    # Map B: Centroid trails
+    # Map B: Centroid trails (with neighbor state context)
     print("\n=== Map B: Centroid Migration Trails ===")
     for code in categories:
-        plot_centroid_trails(profiles_df, classification_df, code, output_dir)
+        plot_centroid_trails(
+            profiles_df, classification_df, code,
+            neighbor_profiles_df=neighbor_profiles_df,
+            output_dir=output_dir,
+        )
 
     # Map C: Entry/exit arrows
     if neighbor_profiles_df is not None and len(neighbor_profiles_df) > 0:
