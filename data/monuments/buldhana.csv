@@ -1,0 +1,7 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Kanchanicha Mahal,Other,Faijalapur,Mehkar,Buldhana,First,20.176206,76.559932,fallback
+Nilkantheswar Temple (Sindhkhedraja),Temple,Sindhkhedraja,Sindhkhedraja,Buldhana,First,,,failed
+Rangmahal (Sindhkhedraja),Other,Sindhkhedraja,Sindhkhedraja,Buldhana,Final,,,failed
+Moti Talav,Other,Sindhkhedraja,Sindhkhedraja,Buldhana,Final,,,failed
+Lakhuji Jadhav Wada,Other,Sindhkhedraja,Sindhkhedraja,Buldhana,Final,,,failed
+Savkarwada,Other,Sindhkhedraja,Sindhkhedraja,Buldhana,Final,,,failed

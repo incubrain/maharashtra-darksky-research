@@ -1,0 +1,27 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Ukandeshwar Temple,Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Khurachi Aai Temple,Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Gokuleshwar Temple,Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Ganapati Temple (Charthana),Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Gupteshwar Temple,Temple,Dharasur,Gangakhed,Parbhani,Final,19.053353,76.6479,fallback
+Rutuvihir Temple,Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Jod Mahadev Temple,Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Jain Temple (Charthana),Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Jain Temple (Jintur),Temple,Jintur,Jintur,Parbhani,Final,19.606036,76.688957,fallback
+Jama Masjid (Parbhani),Other,Parbhani,Parbhani,Parbhani,Final,19.303203,76.496533,ok
+Deepmal (Charthana),Other,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Nageshwar Temple (Charthana),Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Narsimha Temple (Charthana),Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Panch Pandav Temple (Erandol),Temple,Erandol,Parbhani,Parbhani,Final,,,failed
+Pathari Fort,Fort,Pathari,Pathari,Parbhani,Final,19.260569,76.433307,fallback
+Mahadev Temple (Charthana),Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Mahadev Temple (Arandeshwar),Temple,Arandeshwar,Parbhani,Parbhani,Final,,,failed
+Roshankhan Tomb,Other,Parbhani,Parbhani,Parbhani,Final,19.24471,76.776084,fallback
+Shah Mastan Dargah,Other,Jintur,Jintur,Parbhani,Final,19.606036,76.688957,fallback
+Shah Shamsuddin Dargah (Jintur),Other,Jintur,Jintur,Parbhani,Final,19.606036,76.688957,fallback
+Sutareshwar Temple,Temple,Charthana,Jintur,Parbhani,Final,19.627006,76.538304,fallback
+Siddheshwar Mahadev Temple (Bhosi),Temple,Bhosi,Jintur,Parbhani,Final,19.675262,76.651365,fallback
+Sant Janabai Samadhi,Other,Gangakhed,Gangakhed,Parbhani,Final,18.969265,76.750426,fallback
+Hazrat Sayed Shah Dome (Konri),Other,Konri,Jintur,Parbhani,Final,,,failed
+Hanuman Temple (Borvad),Temple,Borvad,Jintur,Parbhani,Final,,,failed
+Hanuman Temple (Charbatula),Temple,Charbatula,Jintur,Parbhani,Final,,,failed

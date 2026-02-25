@@ -1,0 +1,35 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Idgah (Mahur),Other,Mahur,Mahur,Nanded,Final,19.816228,77.930113,fallback
+Unkeshwar Temple,Temple,Unkeshwar,Kinwat,Nanded,Final,19.856175,78.250261,fallback
+Kandhar Fort,Fort,Kandhar,Kandhar,Nanded,Final,18.871818,77.192409,fallback
+Gurudwara (Nanded),Other,Nanded,Nanded,Nanded,Final,19.151282,77.323064,ok
+Jama Masjid - Malik Amber (Nanded),Other,Nanded,Nanded,Nanded,Final,19.172572,77.291412,fallback
+Darbari Masjid - Qutubshahi,Other,Nanded,Nanded,Nanded,Final,19.172572,77.291412,fallback
+Dasharatheshwar Temple and Well,Temple,Mukhed,Mukhed,Nanded,Final,18.705709,77.368656,fallback
+Nandagiri Fort,Fort,Nanded,Nanded,Nanded,Final,19.172572,77.291412,fallback
+Nandi and Temple Remains (Raiwadi),Temple,Raiwadi,Loha,Nanded,Final,,,failed
+Narsimha Temple (Shelgaon),Temple,Shelgaon,Deglur,Nanded,Final,18.614277,77.725919,fallback
+Nandi Temple and Tank (Hottal),Temple,Hottal,Deglur,Nanded,First,,,failed
+Narsimha Temple Complex (Shankhatirth),Temple,Shankhatirth,Mukhed,Nanded,First,,,failed
+Parvati Temple (Hottal),Temple,Hottal,Deglur,Nanded,First,,,failed
+Mahadev Temple (Hottal),Temple,Hottal,Deglur,Nanded,First,,,failed
+Hatikhana (Mahur),Other,Mahur,Mahur,Nanded,First,19.816228,77.930113,fallback
+Pandavleni (Mahur),Caves,Mahur,Mahur,Nanded,Final,19.816228,77.930113,fallback
+Parmeshwar Temple (Hottal),Temple,Hottal,Deglur,Nanded,Final,,,failed
+Parmeshwar Temple (Shirdhon),Temple,Shirdhon,Kandhar,Nanded,Final,,,failed
+Bhognarsimha and Ramlinga Temple,Temple,Raher,Naigaon,Nanded,Final,,,failed
+Bhavani Temple (Pala),Temple,Pala,Mukhed,Nanded,Final,18.636611,77.446467,fallback
+Matrutirth Talav (Mahur),Other,Mahur,Mahur,Nanded,Final,19.816228,77.930113,fallback
+Mahadev Temple (Yevati),Temple,Yevati,Dharmabad,Nanded,Final,,,failed
+"Mahadev Temple (Khanapur, Nanded)",Temple,Khanapur,Deglur,Nanded,Final,18.599653,77.562816,fallback
+Mahadev Temple (Hadgaon),Temple,Hadgaon,Hadgaon,Nanded,Final,19.496147,77.658873,fallback
+Mahur Fort,Fort,Mahur,Mahur,Nanded,Final,19.832884,77.923271,fallback
+Yognarsimha Temple (Raher),Temple,Raher,Naigaon,Nanded,Final,,,failed
+Renukadevi Temple (Mahur),Temple,Mahur,Mahur,Nanded,Final,19.816228,77.930113,fallback
+Shah Luthfullah Dargah,Other,Tembhurni,Himayatnagar,Nanded,Final,19.428452,77.803481,fallback
+Sonapir Dargah (Mahur),Other,Mahur,Mahur,Nanded,Final,19.816228,77.930113,fallback
+Sarfaraj Khan Masjid,Other,Biloli,Biloli,Nanded,Final,18.774667,77.721592,fallback
+Zainuddin Rafai Dargah,Other,Deglur,Deglur,Nanded,Final,18.467756,77.499883,fallback
+Hazrat Sadaruddin and Badaruddin,Other,Shekapur,Mahur,Nanded,Final,19.862058,77.895126,fallback
+Hindu Caves (Shiur),Caves,Shiur,Hadgaon,Nanded,Final,,,failed
+Kshetrapal Temple Remains,Archaeological Site,Manaspuri,Kandhar,Nanded,Final,18.871357,77.209371,fallback

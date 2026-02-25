@@ -1,0 +1,3 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Mahadev Temple (Kasegaon),Temple,Kasegaon,S. Solapur,Solapur,Final,17.788993,75.976392,fallback
+Sangameshwar and Murlidhar Temple,Temple,Hattarsag Kudal,S. Solapur,Solapur,Final,,,failed

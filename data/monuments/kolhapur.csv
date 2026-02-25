@@ -1,0 +1,9 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Pandavdara Shaiva Caves,Caves,Dalvewadi,Shahuwadi,Kolhapur,Final,,,failed
+Bajiprabhu and Phulaji Deshpande Samadhi,Other,Bhattali,Shahuwadi,Kolhapur,Final,,,failed
+Bhudargad,Fort,Peth Shivapur,Bhudargad,Kolhapur,Final,16.253901,74.112929,ok
+Mahadeo Temple (Aare),Temple,Aare,Karvir,Kolhapur,Final,,,failed
+Lakshmi Vilas Palace,Other,Karvir,Kolhapur,Kolhapur,Final,16.660327,74.196004,fallback
+Rangana Fort,Fort,Chikewadi,Bhudargad,Kolhapur,Final,,,failed
+Ramchandra Amatya Samadhi,Other,Panhala,Panhala,Kolhapur,Final,16.808896,74.108228,fallback
+Vishalgad Fort,Fort,Gajapur,Shahuwadi,Kolhapur,Final,,,failed

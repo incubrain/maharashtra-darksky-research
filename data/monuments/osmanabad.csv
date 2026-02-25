@@ -1,0 +1,28 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Uttareshwar Temple,Temple,Ter,Osmanabad,Osmanabad,Final,18.319839,76.141154,fallback
+Chambhar Caves,Caves,Osmanabad,Osmanabad,Osmanabad,Final,18.282245,76.058817,fallback
+Trivikram Temple,Temple,Ter,Osmanabad,Osmanabad,Final,18.319839,76.141154,fallback
+Tirthkund (Ter),Other,Ter,Osmanabad,Osmanabad,Final,18.319839,76.141154,fallback
+Archaeological Site - Kot Tekdi,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Archaeological Site - Kisan Mhaske Survey No. 5,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Archaeological Site - Godavari Tekdi,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Archaeological Site - Bairag Pandhar,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Archaeological Site - Mulani Tekdi,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Archaeological Site - Mahar Tekdi,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Archaeological Site - Renuka Tekdi,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Archaeological Site - Suleman Tekdi,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Archaeological Site - Malak Govind,Archaeological Site,Ter,Osmanabad,Osmanabad,First,18.319839,76.141154,fallback
+Ghummaz (Sastur),Other,Sastur,Lohara,Osmanabad,First,17.997662,76.498275,fallback
+Osmanabad Caves,Caves,Osmanabad,Osmanabad,Osmanabad,Final,18.282245,76.058817,fallback
+Naldurg Fort,Fort,Naldurg,Tuljapur,Osmanabad,Final,17.817916,76.290345,ok
+Prehistoric Stone Circle (Shendri),Archaeological Site,Shendri,Paranda,Osmanabad,Final,,,failed
+Paranda Fort,Fort,Paranda,Paranda,Osmanabad,Final,18.269983,75.4532,ok
+Tulja Bhawani Temple,Temple,Tuljapur,Tuljapur,Osmanabad,Final,18.008662,76.070792,fallback
+Mahadev Temple (Umarga),Temple,Umarga,Umarga,Osmanabad,Final,17.836543,76.625005,fallback
+Mahadev Temple (Mankeshwar),Temple,Mankeshwar,Paranda,Osmanabad,Final,18.35751,75.635742,fallback
+Mahalakshmi Temple (Jagji),Temple,Jagji,Osmanabad,Osmanabad,Final,,,failed
+Lavni Ghummaz,Other,Tuljapur,Tuljapur,Osmanabad,Final,18.008662,76.070792,fallback
+Shivguru Samadhi Temple,Temple,Osmanabad,Osmanabad,Osmanabad,Final,18.282245,76.058817,fallback
+Sant Goroba Kaka Residence,Other,Ter,Osmanabad,Osmanabad,Final,18.319839,76.141154,fallback
+Hazrat Shamsuddin Dargah (Osmanabad),Other,Osmanabad,Osmanabad,Osmanabad,Final,18.282245,76.058817,fallback
+Hindu Temple and Inscription (Murum),Temple,Murum,Murum,Osmanabad,Final,17.786978,76.476106,fallback

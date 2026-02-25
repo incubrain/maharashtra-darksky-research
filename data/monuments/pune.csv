@@ -1,0 +1,24 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Koyrigad Fort,Fort,Ambavane,Mulshi,Pune,Final,,,failed
+Kukdeshwar Temple,Temple,Pur,Junnar,Pune,Final,,,failed
+Khandoba Temple (Jejuri),Temple,Jejuri,Baramati,Pune,Final,18.148395,74.571091,fallback
+Torna Fort,Fort,Velhe,Velhe,Pune,Final,18.276326,73.622578,ok
+Tanaji Malusare Samadhi,Other,Sinhagad,Haveli,Pune,Final,18.365186,73.754987,fallback
+Chalcolithic Settlement (Inamgaon),Archaeological Site,Inamgaon,Shirur,Pune,Final,18.590031,74.537707,fallback
+Nageshwar Temple (Pune City),Temple,Pune City,Haveli,Pune,Final,18.521169,73.863095,ok
+Narsinha Temple (Nira),Temple,Nira,Indapur,Pune,Final,18.100248,74.213681,fallback
+Bhandara Buddhist Cave Complex,Caves,Bhandara Hill,Maval,Pune,First,,,failed
+Mastani Tomb,Other,Pabal,Shirur,Pune,Final,18.831534,74.053644,fallback
+Mahadev Temple (Tulapur),Temple,Tulapur,Haveli,Pune,Final,18.669937,73.995443,fallback
+Mahatma Phule Wada,Other,Pune,Haveli,Pune,Final,18.556589,74.097136,fallback
+Mahadev Temple and Datta Temple Complex,Temple,Loni Bhapkar,Baramati,Pune,First,18.230262,74.38599,fallback
+Rajgad Fort,Fort,Gunjavane,Velhe,Pune,Final,18.245846,73.682163,ok
+Raireshwar Temple,Temple,Rairi,Bhor,Pune,First,,,failed
+Vishrambag Wada,Other,Pune,Haveli,Pune,Final,18.513756,73.853176,ok
+Sangramdurg Fort (Chakan),Fort,Chakan,Khed,Pune,Final,18.762311,73.862545,fallback
+Saint Crispin Church,Other,Pune,Haveli,Pune,Final,18.508103,73.832147,ok
+Santaji Jagnade Maharaj Samadhi,Other,Subumbare,Maval,Pune,Final,,,failed
+Sambhaji Maharaj Samadhi,Other,Vadu,Koregaon,Pune,Final,,,failed
+Sardar Kanhoji Jedhe Wada,Other,Kari,Bhor,Pune,Final,18.551853,73.792718,fallback
+Sinhagad Fort,Fort,Donja,Haveli,Pune,Final,18.364721,73.757511,ok
+Hutatma Rajguru Wada,Other,Rajgurunagar,Khed,Pune,Final,18.855538,73.886395,fallback

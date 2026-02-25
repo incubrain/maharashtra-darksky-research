@@ -1,0 +1,5 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Amba Gate (Amravati),Other,Amravati,Amravati,Amravati,First,20.931622,77.758846,fallback
+Jawahar Gate (Amravati),Other,Amravati,Amravati,Amravati,First,20.933372,77.74446,ok
+Payryachi Vihir,Other,Mahimapur,Daryapur,Amravati,Final,21.061424,77.513242,fallback
+Sasu Sunechi Vihir,Other,Riddhpur,Morshi,Amravati,Final,,,failed

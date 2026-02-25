@@ -1,0 +1,8 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Jambuvant Temple,Temple,Jamkhed,Ambad,Jalna,Final,19.645134,75.653851,fallback
+Prehistoric Site (Ambad),Archaeological Site,Ambad,Ambad,Jalna,Final,19.600533,75.797539,fallback
+Prehistoric Site (Jalna),Archaeological Site,Jalna,Jalna,Jalna,Final,19.831823,75.890934,fallback
+Prehistoric Site (Bhokardan),Archaeological Site,Bhokardan,Jalna,Jalna,Final,20.292832,75.804016,fallback
+Bhokardan Caves,Caves,Bhokardan,Bhokardan,Jalna,Final,20.256975,75.770263,fallback
+Mahadev Temple (Anva),Temple,Anva,Bhokardan,Jalna,Final,,,failed
+Amargad Fort,Fort,Mantha,Mantha,Jalna,Final,19.644387,76.386976,fallback

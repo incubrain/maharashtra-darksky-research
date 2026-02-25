@@ -1,0 +1,41 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Ajantha Sarai,Other,Ajanta,Sillod,Aurangabad,Final,20.303131,75.654742,fallback
+Antur Fort,Fort,Antur,Kannad,Aurangabad,Final,,,failed
+Azamshah Tomb,Other,Khultabad,Khultabad,Aurangabad,Final,20.012366,75.192888,fallback
+Abul Hasan Tanashah Tomb,Other,Khultabad,Khultabad,Aurangabad,Final,20.012366,75.192888,fallback
+Asafjahan Tomb,Other,Khultabad,Khultabad,Aurangabad,Final,20.012366,75.192888,fallback
+Delhi Gate (Aurangabad),Other,Aurangabad,Aurangabad,Aurangabad,First,19.897411,75.337776,ok
+Narsimha Sculpture (Paithan),Other,Paithan,Paithan,Aurangabad,First,19.481195,75.380128,fallback
+Makai Gate,Other,Aurangabad,Aurangabad,Aurangabad,First,19.894032,75.318489,ok
+Lala Hardol Samadhi,Other,Aurangabad,Aurangabad,Aurangabad,First,19.8598,75.311401,fallback
+Sheshashayi Vishnu (Paithan),Other,Paithan,Paithan,Aurangabad,First,19.481195,75.380128,fallback
+Kali Masjid,Other,Aurangabad,Aurangabad,Aurangabad,Final,19.8598,75.311401,fallback
+"Khandoba Temple (Satara, Aurangabad)",Temple,Satara,Aurangabad,Aurangabad,Final,19.851523,75.311624,fallback
+Khan-e-Jahan Baug,Other,Khultabad,Khultabad,Aurangabad,Final,20.012366,75.192888,fallback
+Ghatotkach Caves,Caves,Jinjala,Soygaon,Aurangabad,Final,,,failed
+Chowk Masjid,Other,Aurangabad,Aurangabad,Aurangabad,Final,19.8598,75.311401,fallback
+Jogeshwari Devi Caves,Caves,Ghatnandra,Sillod,Aurangabad,Final,,,failed
+Jame Masjid - Asafjahan (Ajanta),Other,Ajanta,Sillod,Aurangabad,Final,20.303131,75.654742,fallback
+Tirthstambha (Paithan),Other,Paithan,Paithan,Aurangabad,Final,19.481195,75.380128,fallback
+Taltam Fort,Fort,Jinjala,Soygaon,Aurangabad,Final,,,failed
+Nageshwar Temple (Rahimabad),Temple,Rahimabad,Sillod,Aurangabad,Final,20.347186,75.723257,fallback
+Navkhanda Palace,Other,Aurangabad,Aurangabad,Aurangabad,Final,19.8598,75.311401,fallback
+Nasirjung Tomb,Other,Khultabad,Khultabad,Aurangabad,Final,20.012366,75.192888,fallback
+Neolithic Site (Aurangabad),Archaeological Site,Aurangabad,Aurangabad,Aurangabad,Final,19.8598,75.311401,fallback
+Neolithic Site (Khultabad),Archaeological Site,Khultabad,Khultabad,Aurangabad,Final,20.012366,75.192888,fallback
+Panchakki,Other,Aurangabad,Aurangabad,Aurangabad,Final,19.889523,75.315446,ok
+Archaeological Site - Yadav Period (Rahimabad),Archaeological Site,Rahimabad,Sillod,Aurangabad,Final,20.347186,75.723257,fallback
+Baitulwadi Fort,Fort,Baitulwadi,Soygaon,Aurangabad,Final,,,failed
+Bani Begum Baug,Other,Khultabad,Khultabad,Aurangabad,Final,20.012366,75.192888,fallback
+Bhadkal Gate,Other,Aurangabad,Aurangabad,Aurangabad,Final,19.888769,75.321625,ok
+Munim Baug,Other,Khultabad,Khultabad,Aurangabad,Final,20.012366,75.192888,fallback
+Maloji Raje Bhosale Gadhi Remains,Other,Verul,Khultabad,Aurangabad,Final,20.024791,75.167213,fallback
+Rudreshwar Caves,Caves,Baitulwadi,Soygaon,Aurangabad,Final,,,failed
+Lal Masjid,Other,Aurangabad,Aurangabad,Aurangabad,Final,19.8598,75.311401,fallback
+Vadeshwar Mahadev Temple,Temple,Ambhai,Sillod,Aurangabad,Final,20.468853,75.565816,fallback
+Pillar Inscription (Antur),Other,Antur,Kannad,Aurangabad,Final,,,failed
+Shahgunj Masjid,Other,Aurangabad,Aurangabad,Aurangabad,Final,19.8598,75.311401,fallback
+Shahi Hamam (Daulatabad),Other,Daulatabad,Aurangabad,Aurangabad,Final,19.936458,75.225832,fallback
+Soneri Mahal,Other,Aurangabad,Aurangabad,Aurangabad,Final,19.906646,75.30932,ok
+Salarjung Baradari,Other,Ajanta,Sillod,Aurangabad,Final,20.303131,75.654742,fallback
+Sarai (Fardapur),Other,Fardapur,Soygaon,Aurangabad,Final,20.584936,75.725121,fallback

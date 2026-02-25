@@ -1,0 +1,4 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Dutch Factory,Other,Vengurla,Vengurla,Sindhudurg,Final,15.859167,73.630806,ok
+Bharatgad,Fort,Masure,Malvan,Sindhudurg,Final,16.171244,73.50244,fallback
+Yashwantgad (Sukalbhat),Fort,Sukalbhat,Vengurla,Sindhudurg,Final,,,failed

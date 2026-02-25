@@ -1,0 +1,22 @@
+name,monument_type,place,taluka,district,notification_status,lat,lon,geocode_status
+Karneshwar Temple,Temple,Kasba Sangameshwar,Ratnagiri,Ratnagiri,Final,,,failed
+Gopalgad Fort,Fort,Anganvel,Guhagar,Ratnagiri,Final,17.571506,73.151826,ok
+Goa Fort,Fort,Harne,Dapoli,Ratnagiri,Final,17.815539,73.090614,ok
+Thiba Palace,Other,Nachne,Ratnagiri,Ratnagiri,Final,,,failed
+Thiba King and Queen Tomb,Other,Nachne,Ratnagiri,Ratnagiri,Final,,,failed
+Purnagad,Fort,Purnagad,Ratnagiri,Ratnagiri,Final,16.814072,73.322401,ok
+Buddhist Caves,Caves,Khed,Khed,Ratnagiri,Final,17.71257,73.410664,fallback
+Bankot Fort,Fort,Mandangad,Ratnagiri,Ratnagiri,Final,17.978218,73.040202,ok
+Mahipatgad Fort,Fort,Nigudwadi,Sangameshwar,Ratnagiri,Final,,,failed
+Yashwantgad (Nate),Fort,Nate,Rajapur,Ratnagiri,Final,16.630896,73.356844,ok
+Rasalgad,Fort,Rasalgad,Khed,Ratnagiri,Final,17.766302,73.509991,ok
+Lokmanya Tilak Birthplace,Other,Ratnagiri,Ratnagiri,Ratnagiri,Final,16.996342,73.290811,ok
+Petroglyph at Devihasol,Archaeological Site,Rajapur,Rajapur,Ratnagiri,First,16.65332,73.51485,fallback
+Petroglyph at Bhagvatinagar,Archaeological Site,Ratnagiri,Ratnagiri,Ratnagiri,First,16.993352,73.295437,fallback
+Petroglyph at Chave,Archaeological Site,Ratnagiri,Ratnagiri,Ratnagiri,First,16.993352,73.295437,fallback
+Petroglyph at Wadirundhe,Archaeological Site,Rajapur,Rajapur,Ratnagiri,First,16.65332,73.51485,fallback
+Petroglyph at Kapadgaon,Archaeological Site,Ratnagiri,Ratnagiri,Ratnagiri,First,16.993352,73.295437,fallback
+Petroglyph at Barsu No. 2,Archaeological Site,Rajapur,Rajapur,Ratnagiri,First,16.65332,73.51485,fallback
+Petroglyph at Deud,Archaeological Site,Ratnagiri,Ratnagiri,Ratnagiri,First,16.993352,73.295437,fallback
+Petroglyph at Rajapur,Archaeological Site,Rajapur,Rajapur,Ratnagiri,First,16.65332,73.51485,fallback
+Petroglyph at Ukshi,Archaeological Site,Ratnagiri,Ratnagiri,Ratnagiri,First,16.993352,73.295437,fallback
