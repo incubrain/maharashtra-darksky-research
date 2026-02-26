@@ -211,12 +211,12 @@ class TestProjectedTowns:
         assert "display_name" in df.columns
 
     def test_projected_year_files(self):
-        """Per-year projected CSVs should exist for 2012-2024."""
+        """Per-year projected CSVs should exist for all study years."""
         base = os.path.join("data", "census", "projected_towns")
         if not os.path.isdir(base):
             pytest.skip("Projected town data not generated yet")
 
-        for year in range(2012, 2025):
+        for year in config.STUDY_YEARS:
             path = os.path.join(base, f"towns_{year}.csv")
             assert os.path.exists(path), f"Missing projected towns for {year}"
             df = pd.read_csv(path)
@@ -230,7 +230,7 @@ class TestProjectedTowns:
             pytest.skip("Projected town data not generated yet")
 
         prev_count = 0
-        for year in range(2012, 2025):
+        for year in config.STUDY_YEARS:
             path = os.path.join(base, f"towns_{year}.csv")
             if not os.path.exists(path):
                 continue

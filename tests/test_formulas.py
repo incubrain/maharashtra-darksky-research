@@ -189,7 +189,7 @@ class TestFitLogLinearTrend:
         years = np.arange(2012, 2025)
         radiance = 5.0 * (1.08 ** (years - 2012))
         result = fit_log_linear_trend(years, radiance)
-        assert len(result["residuals"]) == 13
+        assert len(result["residuals"]) == len(years)
 
     def test_returns_beta(self):
         years = np.arange(2012, 2025)
@@ -246,8 +246,8 @@ class TestFitLogLinearTrend:
 
 
 class TestSkyBrightnessConstants:
-    def test_natural_sky_brightness(self):
-        assert NATURAL_SKY_BRIGHTNESS == 22.0
+    # NATURAL_SKY_BRIGHTNESS == 22.0 is verified with full Falchi citation
+    # in test_research_validation.py — no need to duplicate here.
 
     def test_radiance_to_mcd_positive(self):
         assert RADIANCE_TO_MCD > 0
