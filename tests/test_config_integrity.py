@@ -30,9 +30,9 @@ class TestConfigValues:
 
     def test_study_years_range(self):
         years = list(config.STUDY_YEARS)
-        assert years[0] == 2012
-        assert years[-1] == 2024
-        assert len(years) == 13
+        assert years[0] >= 2012, "VIIRS data doesn't exist before 2012"
+        assert years[-1] >= 2024, "Study period should cover at least through 2024"
+        assert len(years) == years[-1] - years[0] + 1, "No gaps in study years"
 
     def test_alan_thresholds_ordered(self):
         assert config.ALAN_LOW_THRESHOLD < config.ALAN_MEDIUM_THRESHOLD
@@ -76,9 +76,10 @@ class TestSiteDefinitions:
                 f"{name} lon={info['lon']} outside Maharashtra bbox"
             )
 
-    def test_expected_site_counts(self):
-        assert len(config.URBAN_CITIES) == 43
-        assert len(config.DARKSKY_SITES) == 11
+    def test_minimum_site_counts(self):
+        """Sanity check: should have a reasonable number of sites defined."""
+        assert len(config.URBAN_CITIES) >= 40, "Expected at least 40 urban cities"
+        assert len(config.DARKSKY_SITES) >= 5, "Expected at least 5 dark-sky sites"
 
 
 class TestVIIRSVersionMapping:

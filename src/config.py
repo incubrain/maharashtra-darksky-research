@@ -43,11 +43,14 @@ MIN_YEARS_FOR_SITE_TREND = 3  # Minimum data points for site trend
 SITE_BUFFER_RADIUS_KM = 10   # Buffer around point sites
 PROTECTED_AREA_BUFFER_KM = 10  # Buffer outside protected boundaries
 
-# Following Zheng et al. (2019) anisotropic ALAN investigation:
-# "Radial extraction at 1, 5, 10, 20, 50 km from city centers
-# characterises the exponential decay of urban light domes."
-# Citation: Zheng, Q. et al. (2019). Developing a new cross-sensor
-#           calibration model. Remote Sensing, 11(18), 2132.
+# Radial extraction distances for urban light gradient analysis.
+# Standard concentric-ring approach used across NTL literature for
+# characterising the spatial decay of urban light domes.
+# Ref: Bennie, J. et al. (2014). Contrasting trends in light pollution
+#      across Europe. Scientific Reports, 4, 3789.
+# NOTE: A prior version cited "Zheng et al. (2019), DOI 10.3390/rs11182132"
+# but that DOI resolves to an unrelated thermal plume paper by Faulkner
+# et al. The citation has been corrected (finding Z1, review 2026-02-27).
 URBAN_GRADIENT_RADII_KM = [1, 5, 10, 20, 50]
 
 # Approximate Maharashtra bounding box (with buffer for subsetting)
@@ -198,6 +201,11 @@ VIIRS_VERSION_MAPPING = {
     2022: "v22", 2023: "v22", 2024: "v22",
 }
 
+# VIIRS DNB resolution: ~15 arc-seconds grid (~450 m at equator).
+# Native sensor resolution is ~750 m; the 15 arc-second grid is the
+# resampled annual composite product resolution.
+# Ref: Levin, N. et al. (2020). Remote Sensing of Night Lights: A Review.
+#      Remote Sensing of Environment, 237, 111443. Table 1.
 VIIRS_RESOLUTION_DEG = 0.004166667  # ~15 arc-seconds
 
 # ─── VISUALIZATION PARAMETERS ────────────────────────────────────────────

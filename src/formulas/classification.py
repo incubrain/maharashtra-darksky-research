@@ -83,14 +83,19 @@ def classify_alan_series(radiance_series, low_threshold=None, medium_threshold=N
 def classify_stability(cv, stable_threshold=None, erratic_threshold=None):
     """Classify temporal stability by coefficient of variation.
 
+    NOTE (findings SE1, SE5): The default thresholds (0.2/0.5) are
+    project-specific heuristics, not published VIIRS standards. Small &
+    Elvidge (2022) use a multi-moment approach with five zones instead.
+    Results should be treated as exploratory classifications.
+
     Parameters
     ----------
     cv : float
         Coefficient of variation (std / mean).
     stable_threshold : float, optional
-        Defaults to 0.2.
+        Defaults to 0.2 (project heuristic, not a published threshold).
     erratic_threshold : float, optional
-        Defaults to 0.5.
+        Defaults to 0.5 (project heuristic, not a published threshold).
 
     Returns
     -------

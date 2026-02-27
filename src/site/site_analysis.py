@@ -84,6 +84,17 @@ def build_site_geodataframe(buffer_km=None, entity_type="all", city_source="conf
     with near-zero background noise. This is essential for sites within
     buffer_km of the coastline.
 
+    PSF ADJACENCY WARNING (finding L2, review 2026-02-27):
+    The VIIRS DNB Point Spread Function (PSF) has a half-power diameter
+    of ~750 m. For dark-sky sites within ~2-3 km of bright urban areas,
+    PSF spillover from adjacent bright pixels can contaminate the site's
+    radiance statistics, making it appear brighter than it is. Sites like
+    Bhimashankar (near Pune) and Bhandardara (near Nashik) may be affected.
+    No correction is applied — users should inspect nearby urban proximity
+    when interpreting dark-site radiance values.
+    Ref: Levin, N. et al. (2020). Remote Sensing of Night Lights: A Review.
+    Remote Sensing of Environment, 237, 111443. Section 3.1.
+
     Citation: Wang, J. et al. (2022). Protected area buffer analysis.
     """
     if buffer_km is None:

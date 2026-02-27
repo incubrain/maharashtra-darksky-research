@@ -41,7 +41,7 @@ class TestYearlyToTrendFlow:
                 d_data["median_radiance"].values,
             )
             assert not np.isnan(result["annual_pct_change"])
-            assert result["n_years"] == 13
+            assert result["n_years"] == len(d_data)
 
     def test_classification_follows_trends(self, yearly_df):
         """ALAN classification from latest year should be consistent."""

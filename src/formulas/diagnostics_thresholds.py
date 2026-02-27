@@ -32,5 +32,15 @@ R_SQUARED_WARNING = 0.5
 
 # Coefficient of variation thresholds for temporal stability classification.
 # CV < stable → "stable"; CV < erratic → "moderate"; CV >= erratic → "erratic".
+#
+# PROVENANCE (findings SE1, SE5, review 2026-02-27):
+# These thresholds are PROJECT-SPECIFIC HEURISTICS chosen for the Maharashtra
+# dataset. They do NOT appear in any peer-reviewed VIIRS literature.
+# Small & Elvidge (2022) use a multi-moment approach (mean + variance +
+# skewness + kurtosis) with five stability zones, not three CV-based bins.
+# Our three-bin CV classification should be treated as exploratory, not as a
+# published standard.
+# Ref: Small, C. & Elvidge, C.D. (2022). Mapping decadal change in
+#      anthropogenic night light. Sensors, 22(12), 4459.
 CV_STABLE_THRESHOLD = 0.2
 CV_ERRATIC_THRESHOLD = 0.5

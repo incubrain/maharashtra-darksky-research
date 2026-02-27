@@ -6,6 +6,11 @@ aggregating VIIRS DNB annual composites.  These are called by the pipeline
 step functions in ``src/pipeline_steps.py``.
 
 Entry point: ``python3 -m src.pipeline_runner``
+
+Methodological reference: Levin, N. et al. (2020). Remote Sensing of
+Night Lights: A Review and an Outlook for the Future. Remote Sensing of
+Environment, 237, 111443. Sections 2-4 cover VIIRS DNB preprocessing,
+quality filtering, and trend analysis best practices used in this module.
 """
 
 import gzip
@@ -126,6 +131,13 @@ def identify_layers(tif_paths):
       VNL_v21_npp_2013_global_vcmcfg_c202205302300.median_masked.dat.tif
     and simplified test data naming:
       median_masked_2023.tif
+
+    NOTE (finding E4, review 2026-02-27): When both vcmcfg and vcmslcfg
+    variants exist for the same layer, vcmcfg (cloud-free, no stray-light
+    correction) is preferred for trend consistency. The vcmslcfg variant
+    includes stray-light correction that changes the noise characteristics
+    and can introduce spurious trends at the v2.1→v2.2 boundary.
+    Ref: Elvidge, C.D. et al. (2017). Int. J. Remote Sensing, 38(21).
     """
     layers = {}
     for p in tif_paths:
@@ -134,6 +146,10 @@ def identify_layers(tif_paths):
         # Use keyword-in-filename matching so both dot-delimited (NOAA)
         # and underscore-delimited (test data) names are detected.
         if "median_masked" in basename:
+            # Prefer vcmcfg over vcmslcfg for trend consistency (E4)
+            if "median" in layers and "vcmcfg" not in basename:
+                log.debug("Skipping vcmslcfg variant, already have vcmcfg: %s", basename)
+                continue
             layers["median"] = p
         elif "average_masked" in basename or "avg_rade9h" in basename:
             layers["average"] = p
@@ -244,6 +260,19 @@ def apply_quality_filters(median_path, lit_mask_path=None, cf_cvg_path=None,
                  valid_mask.sum())
 
     filtered = np.where(valid_mask, median_data, np.nan)
+
+    # Clip negative radiance values to zero.
+    # VIIRS DNB can report small negative radiances due to sensor noise,
+    # background over-subtraction, or stray-light correction artefacts.
+    # Negative values are physically meaningless and produce NaN when
+    # passed to log-linear trend fitting (log(negative) = NaN).
+    # Ref: Elvidge et al. (2017), Section 3.1 — negative radiances occur
+    # in low-light areas after background subtraction.
+    n_negative = np.nansum(filtered < 0)
+    if n_negative > 0:
+        log.info("Clipped %d negative radiance pixels to zero", n_negative)
+        filtered = np.where(filtered < 0, 0.0, filtered)
+
     return filtered, meta, transform
 
 
@@ -279,6 +308,91 @@ def compute_district_stats(filtered_array, transform, gdf):
     df.columns = ["district", "mean_radiance", "median_radiance", "pixel_count",
                    "min_radiance", "max_radiance", "std_radiance"]
     return df
+
+
+def compute_pixel_change_decomposition(
+    filtered_early, filtered_late, transform, gdf, threshold_nw=0.5,
+):
+    """Decompose per-district radiance change into brightening/dimming/stable pixels.
+
+    Following Bennie et al. (2014), aggregate district trends mask spatial
+    heterogeneity — a district can show zero net change while having equal
+    brightening and dimming areas. This decomposition reveals the underlying
+    spatial dynamics.
+
+    Ref: Bennie, J. et al. (2014). Contrasting trends in light pollution
+    across Europe based on satellite observed night time lights. Scientific
+    Reports, 4, 3789.
+
+    Parameters
+    ----------
+    filtered_early : np.ndarray
+        Quality-filtered radiance array for early period.
+    filtered_late : np.ndarray
+        Quality-filtered radiance array for late period.
+    transform : rasterio.Affine
+        Raster affine transform.
+    gdf : GeoDataFrame
+        District polygons with 'district' column.
+    threshold_nw : float
+        Minimum change (nW/cm²/sr) to count as brightening or dimming.
+
+    Returns
+    -------
+    DataFrame with columns: district, pct_brightening, pct_dimming,
+    pct_stable, mean_brightening_nw, mean_dimming_nw.
+    """
+    diff = filtered_late - filtered_early
+    valid = np.isfinite(diff)
+
+    bright_mask = (diff > threshold_nw) & valid
+    dim_mask = (diff < -threshold_nw) & valid
+    stable_mask = (np.abs(diff) <= threshold_nw) & valid
+
+    rows = []
+    for _, row in gdf.iterrows():
+        district_name = row["district"]
+        geom_arr = [row.geometry.__geo_interface__]
+
+        total_s = zonal_stats(geom_arr, valid.astype("float32"),
+                              stats=["sum"], nodata=0, affine=transform, all_touched=True)
+        bright_s = zonal_stats(geom_arr, bright_mask.astype("float32"),
+                               stats=["sum"], nodata=0, affine=transform, all_touched=True)
+        dim_s = zonal_stats(geom_arr, dim_mask.astype("float32"),
+                            stats=["sum"], nodata=0, affine=transform, all_touched=True)
+        stable_s = zonal_stats(geom_arr, stable_mask.astype("float32"),
+                               stats=["sum"], nodata=0, affine=transform, all_touched=True)
+
+        total = total_s[0]["sum"] or 0
+        n_bright = bright_s[0]["sum"] or 0
+        n_dim = dim_s[0]["sum"] or 0
+        n_stable = stable_s[0]["sum"] or 0
+
+        if total > 0:
+            bright_ch = zonal_stats(
+                geom_arr, np.where(bright_mask, diff, np.nan).astype("float32"),
+                stats=["mean"], nodata=np.nan, affine=transform, all_touched=True)
+            dim_ch = zonal_stats(
+                geom_arr, np.where(dim_mask, diff, np.nan).astype("float32"),
+                stats=["mean"], nodata=np.nan, affine=transform, all_touched=True)
+
+            rows.append({
+                "district": district_name,
+                "pct_brightening": round(n_bright / total * 100, 1),
+                "pct_dimming": round(n_dim / total * 100, 1),
+                "pct_stable": round(n_stable / total * 100, 1),
+                "mean_brightening_nw": round(bright_ch[0]["mean"] or 0, 3),
+                "mean_dimming_nw": round(dim_ch[0]["mean"] or 0, 3),
+            })
+        else:
+            rows.append({
+                "district": district_name,
+                "pct_brightening": np.nan, "pct_dimming": np.nan,
+                "pct_stable": np.nan,
+                "mean_brightening_nw": np.nan, "mean_dimming_nw": np.nan,
+            })
+
+    return pd.DataFrame(rows)
 
 
 # ---------------------------------------------------------------------------

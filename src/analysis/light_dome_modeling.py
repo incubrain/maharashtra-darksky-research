@@ -1,8 +1,19 @@
 """
-Light dome spatial extent modeling.
+Urban radiance footprint modeling.
 
 Fits exponential decay models to urban radial profiles to quantify
-the spatial extent of city light domes.
+the spatial extent of city radiance footprints.
+
+TERMINOLOGY NOTE (finding CF2, review 2026-02-27):
+This module models the spatial decay of upward VIIRS-detected radiance
+from urban centres — an "urban radiance footprint", NOT a true atmospheric
+"light dome". Cinzano & Falchi (2012) show that atmospheric light
+propagation follows a ~d^(-2.5) power law and integrates over ~195 km,
+whereas our exponential decay model describes urban morphology (built-up
+area tapering at city edges). The two phenomena are physically distinct:
+  - Radiance footprint: ground-level light emission pattern (this module)
+  - Light dome: sky glow visible to an observer from scattered light
+Ref: Cinzano, P. & Falchi, F. (2012). MNRAS, 427(4), 3337-3357.
 """
 
 from src.logging_config import get_pipeline_logger

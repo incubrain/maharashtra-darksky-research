@@ -8,6 +8,30 @@ ground-based SQM measurements and Bortle scale classification.
 Based on Falchi et al. (2016) methodology:
   "The new world atlas of artificial night sky brightness."
   Science Advances, 2(6), e1600377.
+
+IMPORTANT LIMITATIONS:
+- **Local-pixel-only approximation (CF1, F1):** This conversion uses only
+  the local pixel's upward radiance. Cinzano & Falchi (2012) show that sky
+  brightness at any point integrates scattered light from sources within a
+  ~195 km radius. At dark sites near cities, ignoring this integration can
+  produce errors of 1-3 mag/arcsec². For accurate sky brightness
+  assessments, use the Falchi et al. (2016) World Atlas GeoTIFF instead.
+  Ref: Cinzano, P. & Falchi, F. (2012). Monthly Notices of the Royal
+  Astronomical Society, 427(4), 3337-3357.
+- **LED spectral bias (F4, K2):** VIIRS DNB misses blue-shifted LED light,
+  causing Bortle classifications to drift 1-2 classes over the study period
+  as municipalities transition from HPS to LED lighting.
+  Ref: Kyba et al. (2023), Science, 379(6629), 265-268.
+- **No elevation correction (CF4):** Maharashtra ranges from sea level to
+  ~1400 m; atmospheric column depth affects scattering efficiency but is
+  not accounted for here. A first-order correction factor is available via
+  elevation_correction_factor() in this module.
+- **Seasonal aerosol variation (CF5):** Maharashtra experiences significant
+  aerosol optical depth (AOD) variation between monsoon (low AOD, clearer
+  skies) and winter/pre-monsoon (high AOD, more scattering). Annual
+  composites mask this seasonal variation, which affects sky brightness
+  estimates by up to ~0.5 mag at high-AOD sites.
+  Ref: Cinzano, P. & Falchi, F. (2012). MNRAS, 427(4), 3337-3357.
 """
 
 from src.logging_config import get_pipeline_logger
@@ -42,6 +66,11 @@ def radiance_to_sky_brightness(radiance_nw):
     Uses the Falchi et al. (2016) empirical relationship between
     upward satellite-measured radiance and ground-level sky brightness.
 
+    NOTE: This is a local-pixel-only approximation. True sky brightness
+    integrates scattered light from sources within ~195 km (Cinzano &
+    Falchi 2012). Results may err by 1-3 mag at dark sites near cities.
+    See module docstring for full list of limitations.
+
     Args:
         radiance_nw: Radiance in nW/cm²/sr (scalar or array).
 
@@ -61,6 +90,39 @@ def radiance_to_sky_brightness(radiance_nw):
     mag = -2.5 * np.log10(total_mcd / REFERENCE_MCD)
 
     return mag
+
+
+def elevation_correction_factor(elevation_m):
+    """First-order elevation correction for sky brightness estimates.
+
+    At higher elevations, the shorter atmospheric column reduces Rayleigh
+    scattering, making the sky darker for the same upward radiance.
+    This implements a simple exponential correction based on atmospheric
+    scale height.
+
+    Finding CF4: Maharashtra ranges from sea level to ~1400 m (Mahabaleshwar,
+    Bhandardara). Without correction, hill-station sites appear ~0.1-0.3
+    mag brighter than they actually are.
+
+    Ref: Cinzano, P. & Falchi, F. (2012). MNRAS, 427(4), 3337-3357 —
+    atmospheric column parameterisation for light propagation.
+
+    Parameters
+    ----------
+    elevation_m : float or array-like
+        Elevation above sea level in metres.
+
+    Returns
+    -------
+    float or array
+        Multiplicative correction factor for sky brightness (in mcd/m²).
+        Apply as: corrected_mcd = mcd * elevation_correction_factor(elev).
+        Values < 1.0 indicate reduced scattering at elevation.
+    """
+    elevation_m = np.asarray(elevation_m, dtype=float)
+    # Atmospheric scale height ~8500 m (Rayleigh scattering)
+    scale_height = 8500.0
+    return np.exp(-elevation_m / scale_height)
 
 
 def classify_bortle(mag_arcsec2):

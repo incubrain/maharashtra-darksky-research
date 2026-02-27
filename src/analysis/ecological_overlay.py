@@ -4,6 +4,12 @@ Ecological and land-use overlay analysis.
 Cross-references ALAN radiance data with land cover classes and
 ecological zones to assess light pollution impact on different
 habitat types and landscape contexts.
+
+NOTE ON DBS USAGE (finding Z3, review 2026-02-27):
+This module applies DBS (Dynamic Background Subtraction) to radiance
+rasters before computing land cover statistics. This is consistent
+with gradient_analysis.py (also uses DBS for spatial analysis).
+See gradient_analysis.py module docstring for full DBS rationale.
 """
 
 from src.logging_config import get_pipeline_logger

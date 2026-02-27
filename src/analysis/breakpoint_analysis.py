@@ -17,16 +17,29 @@ KNOWN FINDING — Universal 2016 Breakpoint:
        - The 2016 detection is an artifact of the AIC model selecting the
          year that best separates the two radiometric regimes.
 
-    2. Real-world events:
-       - India's Deen Dayal Upadhyaya Gram Jyoti Yojana (DDUGJY) rural
-         electrification program (2015–2019) and Ujala LED programme
-         (2015+) drove genuine step-changes in nighttime radiance.
+    2. Electrification confound (findings M1, M2, M3):
+       India's three overlapping rural electrification programmes coincide
+       exactly with the VIIRS study period:
+       - DDUGJY (2014+): Rural grid infrastructure, ~18,000 villages
+       - UJALA (2015+): LED bulb distribution, >360M bulbs by 2019
+       - Saubhagya (2017+): Universal household electrification
+       These drove genuine step-changes in nighttime radiance that VIIRS
+       cannot separate from organic ALAN growth.
+       Ref: Min, B. et al. (2017). Detection of rural electrification in
+       India using DMSP-OLS and VIIRS. Papers in Regional Science, 96(4).
+
+    3. Rural dark-sky site unreliability (M3):
+       Rural areas had 3x worse load-shedding than urban centres and were
+       primary electrification beneficiaries. Dark-sky site trends are
+       especially confounded — apparent brightening may reflect improved
+       electricity supply rather than new light installations.
 
     IMPLICATION: A single-breakpoint model is too coarse for this data.
     Future work should consider:
        - Multi-breakpoint detection (BIC-penalised to avoid overfitting).
        - Separate trend fitting for pre-2014 vs post-2014 periods.
        - Including VIIRS product version as a covariate in the regression.
+       - Including electrification programme milestones as covariates.
 """
 
 from src.logging_config import get_pipeline_logger
@@ -63,8 +76,14 @@ def detect_trend_breakpoints(yearly_df, district, entity_col="district"):
         return {
             entity_col: district, "breakpoint_year": None,
             "growth_rate_before": np.nan, "growth_rate_after": np.nan,
+            "change_type": None,
             "p_value": np.nan, "aic_improvement": np.nan,
         }
+
+    # Clip negative radiance to zero before log transform (same as E1 fix
+    # in trend.py). VIIRS DNB can produce small negatives from background
+    # subtraction; log(negative + epsilon) → NaN corrupts the piecewise fit.
+    radiance = np.clip(radiance, 0, None)
 
     log_rad = np.log(radiance + config.LOG_EPSILON)
 
@@ -109,6 +128,7 @@ def detect_trend_breakpoints(yearly_df, district, entity_col="district"):
             "breakpoint_year": None,
             "growth_rate_before": round((np.exp(beta_single) - 1) * 100, 2),
             "growth_rate_after": round((np.exp(beta_single) - 1) * 100, 2),
+            "change_type": None,
             "p_value": np.nan,
             "aic_improvement": 0.0,
         }
@@ -122,11 +142,25 @@ def detect_trend_breakpoints(yearly_df, district, entity_col="district"):
     # Test if interaction term is significant
     p_value = best_result.pvalues[3] if len(best_result.pvalues) > 3 else np.nan
 
+    # Classify the change type at the breakpoint (finding B4):
+    # acceleration = growth rate increased; deceleration = decreased;
+    # reversal = changed sign (growth → decline or vice versa).
+    # Ref: Bennie, J. et al. (2014). Scientific Reports, 4, 3789.
+    if growth_before >= 0 and growth_after < 0:
+        change_type = "reversal_to_decline"
+    elif growth_before < 0 and growth_after >= 0:
+        change_type = "reversal_to_growth"
+    elif abs(growth_after) > abs(growth_before):
+        change_type = "acceleration"
+    else:
+        change_type = "deceleration"
+
     return {
         entity_col: district,
         "breakpoint_year": int(best_bp),
         "growth_rate_before": round(growth_before, 2),
         "growth_rate_after": round(growth_after, 2),
+        "change_type": change_type,
         "p_value": round(p_value, 6) if not np.isnan(p_value) else np.nan,
         "aic_improvement": round(aic_single - best_aic, 2),
     }

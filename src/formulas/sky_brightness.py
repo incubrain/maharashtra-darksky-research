@@ -15,6 +15,10 @@ NATURAL_SKY_BRIGHTNESS = 22.0
 
 # Empirical conversion factor: nW/cm²/sr → mcd/m².
 # Falchi et al. (2016), Table S1.
+# NOTE (findings F2, CF3, review 2026-02-27): This value is sourced from
+# the Bortle category boundary table in Falchi (2016), not derived from
+# first-principles radiative transfer. It serves as a practical scaling
+# factor for the local-pixel-only approximation used in this pipeline.
 RADIANCE_TO_MCD = 0.177
 
 # Reference luminance for magnitude zero-point in mcd/m².
