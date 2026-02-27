@@ -17,16 +17,29 @@ KNOWN FINDING — Universal 2016 Breakpoint:
        - The 2016 detection is an artifact of the AIC model selecting the
          year that best separates the two radiometric regimes.
 
-    2. Real-world events:
-       - India's Deen Dayal Upadhyaya Gram Jyoti Yojana (DDUGJY) rural
-         electrification program (2015–2019) and Ujala LED programme
-         (2015+) drove genuine step-changes in nighttime radiance.
+    2. Electrification confound (findings M1, M2, M3):
+       India's three overlapping rural electrification programmes coincide
+       exactly with the VIIRS study period:
+       - DDUGJY (2014+): Rural grid infrastructure, ~18,000 villages
+       - UJALA (2015+): LED bulb distribution, >360M bulbs by 2019
+       - Saubhagya (2017+): Universal household electrification
+       These drove genuine step-changes in nighttime radiance that VIIRS
+       cannot separate from organic ALAN growth.
+       Ref: Min, B. et al. (2017). Detection of rural electrification in
+       India using DMSP-OLS and VIIRS. Papers in Regional Science, 96(4).
+
+    3. Rural dark-sky site unreliability (M3):
+       Rural areas had 3x worse load-shedding than urban centres and were
+       primary electrification beneficiaries. Dark-sky site trends are
+       especially confounded — apparent brightening may reflect improved
+       electricity supply rather than new light installations.
 
     IMPLICATION: A single-breakpoint model is too coarse for this data.
     Future work should consider:
        - Multi-breakpoint detection (BIC-penalised to avoid overfitting).
        - Separate trend fitting for pre-2014 vs post-2014 periods.
        - Including VIIRS product version as a covariate in the regression.
+       - Including electrification programme milestones as covariates.
 """
 
 from src.logging_config import get_pipeline_logger

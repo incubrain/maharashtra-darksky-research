@@ -11,7 +11,7 @@ This file validates that:
 3. Sky brightness calibration matches Falchi et al. (2016)
 4. Bortle scale boundaries match Bortle (2001) / Crumey (2014)
 5. Bootstrap sensitivity: CIs overlap across different seeds
-6. Benchmark growth rates match Elvidge et al. (2021) / Li et al. (2020)
+6. Benchmark growth rates match Kyba et al. (2017, 2023) / Li et al. (2020)
 """
 
 import numpy as np
@@ -37,7 +37,7 @@ from src.formulas.diagnostics_thresholds import (
     CV_ERRATIC_THRESHOLD,
 )
 from src.formulas.benchmarks import PUBLISHED_BENCHMARKS
-from src.formulas.quality import LIT_MASK_THRESHOLD, CF_CVG_VALID_RANGE
+from src.formulas.quality import CF_CVG_VALID_RANGE
 
 
 # ── ALAN Classification Thresholds ────────────────────────────────────
@@ -331,19 +331,22 @@ class TestBootstrapSeedSensitivity:
 class TestPublishedBenchmarks:
     """Validate benchmark values against their source publications."""
 
-    def test_global_average_matches_elvidge_2021(self):
-        """Global average ALAN growth = 2.2% [1.8, 2.6].
+    def test_global_lit_area_matches_kyba_2017(self):
+        """Global lit-area ALAN growth = 2.2% [1.8, 2.6].
 
-        Citation: Elvidge, C.D. et al. (2021). Annual time series of global
-        VIIRS nighttime lights. Remote Sensing, 13(5), 922.
-        Table 3: "Global lit area increased at 2.2% per year (2012-2019)."
+        Citation: Kyba, C.C.M. et al. (2017). Artificially lit surface of
+        Earth at night increasing in radiance and extent. Science Advances,
+        3(11), e1701528.  Table 1: lit-area growth rate.
+        NOTE: Previously misattributed to Elvidge et al. (2021). Corrected
+        per finding KY1 (review 2026-02-27).
         """
-        bm = PUBLISHED_BENCHMARKS["global_average"]
-        assert bm["source"] == "Elvidge et al. (2021)"
+        bm = PUBLISHED_BENCHMARKS["global_lit_area"]
+        assert bm["source"] == "Kyba et al. (2017)"
         assert bm["annual_growth_pct"] == 2.2
         assert bm["ci_low"] == 1.8
         assert bm["ci_high"] == 2.6
         assert bm["ci_low"] < bm["annual_growth_pct"] < bm["ci_high"]
+        assert bm["metric_type"] == "lit_area"
 
     def test_india_national_matches_li_2020(self):
         """India national ALAN growth = 5.3% [4.8, 5.8].
@@ -357,13 +360,36 @@ class TestPublishedBenchmarks:
         assert bm["annual_growth_pct"] == 5.3
         assert bm["ci_low"] < bm["annual_growth_pct"] < bm["ci_high"]
 
+    def test_global_total_radiance_matches_kyba_2017(self):
+        """Global total radiance growth = 1.8%.
+
+        Citation: Kyba et al. (2017), Table 1. Total radiance growth is
+        lower than lit-area growth because intensification of already-lit
+        pixels is partially offset by LED spectral shift (finding KY2).
+        """
+        bm = PUBLISHED_BENCHMARKS["global_total_radiance"]
+        assert bm["source"] == "Kyba et al. (2017)"
+        assert bm["annual_growth_pct"] == 1.8
+        assert bm["metric_type"] == "total_radiance"
+
+    def test_global_ground_based_matches_kyba_2023(self):
+        """Ground-based sky brightness growth = 9.6% [8.3, 10.9].
+
+        Citation: Kyba et al. (2023). Citizen scientists report global
+        rapid reductions in the visibility of stars. Science, 379, 265-268.
+        """
+        bm = PUBLISHED_BENCHMARKS["global_ground_based"]
+        assert bm["source"] == "Kyba et al. (2023)"
+        assert bm["annual_growth_pct"] == 9.6
+        assert bm["metric_type"] == "sky_brightness_ground"
+
     def test_developing_asia_between_global_and_india(self):
         """Developing Asia growth should be between global and India.
 
         This is a sanity check: India (fast-growing) should exceed the
         developing Asia average, which should exceed the global average.
         """
-        global_rate = PUBLISHED_BENCHMARKS["global_average"]["annual_growth_pct"]
+        global_rate = PUBLISHED_BENCHMARKS["global_lit_area"]["annual_growth_pct"]
         asia_rate = PUBLISHED_BENCHMARKS["developing_asia"]["annual_growth_pct"]
         india_rate = PUBLISHED_BENCHMARKS["india_national"]["annual_growth_pct"]
         assert global_rate < asia_rate < india_rate
@@ -373,7 +399,14 @@ class TestPublishedBenchmarks:
 
 
 class TestStabilityThresholds:
-    """Validate CV-based stability classification thresholds."""
+    """Validate CV-based stability classification thresholds.
+
+    NOTE (findings SE1, SE5): These thresholds are project-specific
+    heuristics, not published VIIRS standards. Small & Elvidge (2022)
+    use a multi-moment approach with five zones. Our three-bin CV scheme
+    is exploratory. Tests validate internal consistency, not published
+    calibration.
+    """
 
     def test_cv_thresholds_ordered(self):
         """Stable < moderate < erratic thresholds must be ordered."""
@@ -383,9 +416,8 @@ class TestStabilityThresholds:
         """CV < 0.2 means standard deviation is < 20% of mean.
 
         For VIIRS annual composites, a CV of 0.2 corresponds to
-        year-to-year radiance fluctuations of ~20%, which is typical
-        measurement noise for stable areas. This threshold separates
-        genuinely stable ALAN from areas with moderate variability.
+        year-to-year radiance fluctuations of ~20%. This is a project
+        heuristic (not from published VIIRS literature).
         """
         assert CV_STABLE_THRESHOLD == 0.2
 
@@ -393,7 +425,8 @@ class TestStabilityThresholds:
         """CV >= 0.5 means >50% fluctuation — erratic behaviour.
 
         Areas with CV > 0.5 may have data quality issues, intermittent
-        light sources (construction, festivals), or gas flare contamination.
+        light sources, or electrification confounds. This is a project
+        heuristic (not from published VIIRS literature).
         """
         assert CV_ERRATIC_THRESHOLD == 0.5
 
@@ -421,9 +454,8 @@ class TestQualityFilterThresholds:
         """
         assert config.CF_COVERAGE_THRESHOLD == 5
 
-    def test_lit_mask_threshold_reasonable(self):
-        """Lit mask threshold 0.5 is binary boundary for VIIRS lit_mask."""
-        assert LIT_MASK_THRESHOLD == 0.5
+    # LIT_MASK_THRESHOLD test removed (finding E2) — constant was dead code.
+    # The lit_mask filter uses ``lit_data > 0`` (binary mask).
 
     def test_cf_cvg_range_covers_full_year(self):
         """CF coverage range [0, 365] covers all possible observation counts."""

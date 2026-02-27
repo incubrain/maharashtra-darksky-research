@@ -8,6 +8,23 @@ ground-based SQM measurements and Bortle scale classification.
 Based on Falchi et al. (2016) methodology:
   "The new world atlas of artificial night sky brightness."
   Science Advances, 2(6), e1600377.
+
+IMPORTANT LIMITATIONS:
+- **Local-pixel-only approximation (CF1, F1):** This conversion uses only
+  the local pixel's upward radiance. Cinzano & Falchi (2012) show that sky
+  brightness at any point integrates scattered light from sources within a
+  ~195 km radius. At dark sites near cities, ignoring this integration can
+  produce errors of 1-3 mag/arcsec². For accurate sky brightness
+  assessments, use the Falchi et al. (2016) World Atlas GeoTIFF instead.
+  Ref: Cinzano, P. & Falchi, F. (2012). Monthly Notices of the Royal
+  Astronomical Society, 427(4), 3337-3357.
+- **LED spectral bias (F4, K2):** VIIRS DNB misses blue-shifted LED light,
+  causing Bortle classifications to drift 1-2 classes over the study period
+  as municipalities transition from HPS to LED lighting.
+  Ref: Kyba et al. (2023), Science, 379(6629), 265-268.
+- **No elevation correction (CF4):** Maharashtra ranges from sea level to
+  ~1400 m; atmospheric column depth affects scattering efficiency but is
+  not accounted for here.
 """
 
 from src.logging_config import get_pipeline_logger
@@ -41,6 +58,11 @@ def radiance_to_sky_brightness(radiance_nw):
 
     Uses the Falchi et al. (2016) empirical relationship between
     upward satellite-measured radiance and ground-level sky brightness.
+
+    NOTE: This is a local-pixel-only approximation. True sky brightness
+    integrates scattered light from sources within ~195 km (Cinzano &
+    Falchi 2012). Results may err by 1-3 mag at dark sites near cities.
+    See module docstring for full list of limitations.
 
     Args:
         radiance_nw: Radiance in nW/cm²/sr (scalar or array).

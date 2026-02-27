@@ -244,6 +244,19 @@ def apply_quality_filters(median_path, lit_mask_path=None, cf_cvg_path=None,
                  valid_mask.sum())
 
     filtered = np.where(valid_mask, median_data, np.nan)
+
+    # Clip negative radiance values to zero.
+    # VIIRS DNB can report small negative radiances due to sensor noise,
+    # background over-subtraction, or stray-light correction artefacts.
+    # Negative values are physically meaningless and produce NaN when
+    # passed to log-linear trend fitting (log(negative) = NaN).
+    # Ref: Elvidge et al. (2017), Section 3.1 — negative radiances occur
+    # in low-light areas after background subtraction.
+    n_negative = np.nansum(filtered < 0)
+    if n_negative > 0:
+        log.info("Clipped %d negative radiance pixels to zero", n_negative)
+        filtered = np.where(filtered < 0, 0.0, filtered)
+
     return filtered, meta, transform
 
 

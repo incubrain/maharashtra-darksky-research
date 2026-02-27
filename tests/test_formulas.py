@@ -44,7 +44,7 @@ from src.formulas.fitting import (
     EXP_DECAY_MAXFEV,
     LIGHT_DOME_BACKGROUND_THRESHOLD,
 )
-from src.formulas.quality import LIT_MASK_THRESHOLD, CF_CVG_VALID_RANGE
+from src.formulas.quality import CF_CVG_VALID_RANGE
 
 
 # ── classify_alan ──────────────────────────────────────────────────────
@@ -285,8 +285,9 @@ class TestSpatialConstants:
 
 class TestBenchmarkConstants:
     def test_required_benchmarks_present(self):
-        assert "global_average" in PUBLISHED_BENCHMARKS
+        assert "global_lit_area" in PUBLISHED_BENCHMARKS
         assert "india_national" in PUBLISHED_BENCHMARKS
+        assert "global_ground_based" in PUBLISHED_BENCHMARKS
 
     def test_benchmark_has_required_fields(self):
         for name, bm in PUBLISHED_BENCHMARKS.items():
@@ -294,7 +295,9 @@ class TestBenchmarkConstants:
             assert "annual_growth_pct" in bm, f"{name} missing annual_growth_pct"
             assert "ci_low" in bm, f"{name} missing ci_low"
             assert "ci_high" in bm, f"{name} missing ci_high"
-            assert bm["ci_low"] < bm["annual_growth_pct"] < bm["ci_high"]
+            # CI bounds may be None for benchmarks without published CIs
+            if bm["ci_low"] is not None and bm["ci_high"] is not None:
+                assert bm["ci_low"] < bm["annual_growth_pct"] < bm["ci_high"]
 
     def test_interpretation_threshold_positive(self):
         assert BENCHMARK_INTERPRETATION_THRESHOLD > 0
@@ -334,8 +337,8 @@ class TestFittingConstants:
 
 
 class TestQualityConstants:
-    def test_lit_mask_threshold_positive(self):
-        assert LIT_MASK_THRESHOLD > 0
+    # LIT_MASK_THRESHOLD removed (finding E2) — it was dead code.
+    # The lit_mask filter uses ``lit_data > 0`` (binary mask).
 
     def test_cf_cvg_range_valid(self):
         assert CF_CVG_VALID_RANGE[0] < CF_CVG_VALID_RANGE[1]

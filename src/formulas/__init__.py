@@ -48,7 +48,6 @@ from src.formulas.fitting import (
     LIGHT_DOME_BACKGROUND_THRESHOLD,
 )
 from src.formulas.quality import (
-    LIT_MASK_THRESHOLD,
     CF_CVG_VALID_RANGE,
 )
 
@@ -88,6 +87,5 @@ __all__ = [
     "EXP_DECAY_MAXFEV",
     "LIGHT_DOME_BACKGROUND_THRESHOLD",
     # quality
-    "LIT_MASK_THRESHOLD",
     "CF_CVG_VALID_RANGE",
 ]

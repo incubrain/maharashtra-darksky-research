@@ -9,6 +9,24 @@ Log-linear regression log(radiance + ε) ~ year models approximately
 exponential ALAN growth in developing regions. The slope β converts to
 annual % change via (exp(β) - 1) × 100.
 Citation: Elvidge et al. (2021), Section 3; Li et al. (2020).
+
+IMPORTANT CAVEATS — VIIRS radiance trends have known limitations:
+1. **LED spectral bias (F4, KY3):** VIIRS DNB (500-900 nm) is blind to
+   blue LED emissions. As India transitions from HPS to LED under the UJALA
+   programme (2015+), VIIRS underestimates true radiance by ~30%.
+   Ref: Kyba et al. (2017), Science Advances, 3(11), e1701528.
+2. **Ground-truth divergence (K1):** Ground-based measurements show sky
+   brightness increasing ~9.6%/yr vs VIIRS-detected ~2%/yr — a ~5x gap.
+   Ref: Kyba et al. (2023), Science, 379(6629), 265-268.
+3. **Electrification confound (M1):** Maharashtra VIIRS trends for
+   2012-2024 conflate ALAN growth with electricity reliability improvements
+   from DDUGJY (2014), UJALA (2015), and Saubhagya (2017) programmes.
+   Ref: Min et al. (2017), Papers in Regional Science, 96(4), 811-832.
+4. **Bortle drift (K2):** Cumulative LED spectral bias causes VIIRS-derived
+   Bortle classifications to drift 1-2 classes over the study period.
+
+These caveats apply to ALL trend outputs and Bortle classifications
+produced by this pipeline.
 """
 
 import numpy as np
@@ -64,6 +82,12 @@ def fit_log_linear_trend(
 
     years = np.asarray(years, dtype=float)
     radiance = np.asarray(radiance, dtype=float)
+
+    # Clip negative radiance to zero before log transform.
+    # VIIRS DNB can produce small negatives from background subtraction.
+    # log(negative + epsilon) → NaN, which silently corrupts the OLS fit.
+    # Ref: Elvidge et al. (2017) — negative radiances are sensor artefacts.
+    radiance = np.clip(radiance, 0, None)
 
     nan_result = {
         "annual_pct_change": np.nan,

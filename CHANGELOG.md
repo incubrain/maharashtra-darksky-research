@@ -5,6 +5,138 @@ VIIRS ALAN analysis pipeline.
 
 ## [Unreleased] - 2026-02-27
 
+### Research-Driven Scientific Corrections (DRE-64)
+
+Systematic audit of the codebase against 11 peer-reviewed papers identified
+42+ findings. All P0 (critical) and P1 (high priority) items are fixed below.
+Full finding details in `reports/consolidated_findings.md`.
+
+#### P0-1: Negative Radiance Handling Fixed (Finding E1)
+- **Changed:** `viirs_process.apply_quality_filters()` now clips negative
+  radiance pixels to zero after quality filtering, with a logged count.
+- **Changed:** `formulas/trend.fit_log_linear_trend()` now clips negative
+  values before the log transform as a defensive guard.
+- **Reason:** VIIRS DNB can report small negative radiances from sensor noise
+  or background over-subtraction. Previously, `log(negative + 1e-6)` produced
+  NaN, silently corrupting the OLS trend model for affected districts.
+- **Ref:** Elvidge, C.D. et al. (2017). VIIRS night-time lights. Int. J.
+  Remote Sensing, 38(21), 5860-5879. Section 3.1.
+- **Files:** `src/viirs_process.py`, `src/formulas/trend.py`
+
+#### P0-2: Fabricated Zheng Citation Removed (Finding Z1)
+- **Changed:** Removed the citation "Zheng, Q. et al. (2019). Developing a
+  new cross-sensor calibration model. Remote Sensing, 11(18), 2132" from
+  `config.py` radial gradient documentation.
+- **Reason:** DOI 10.3390/rs11182132 resolves to "Coastal Tidal Effects on
+  Industrial Thermal Plumes" by Faulkner et al. — an entirely unrelated paper.
+  The gradient radii are standard NTL practice and are now cited to Bennie
+  et al. (2014).
+- **Ref:** Bennie, J. et al. (2014). Contrasting trends in light pollution
+  across Europe. Scientific Reports, 4, 3789.
+- **Files:** `src/config.py`
+
+#### P0-3: Benchmark Attribution Corrected (Findings KY1, KY2, E3)
+- **Changed:** Global 2.2% growth rate re-attributed from "Elvidge et al.
+  (2021)" to its true origin, Kyba et al. (2017).
+- **Changed:** Benchmark key renamed `global_average` → `global_lit_area`
+  to disambiguate from total radiance growth (1.8%).
+- **Added:** Two new benchmarks:
+  - `global_total_radiance`: 1.8%/yr from Kyba (2017) — total VIIRS-detected
+    radiance growth (lit area × intensity).
+  - `global_ground_based`: 9.6%/yr from Kyba (2023) — ground-based naked-eye
+    star visibility decline, ~5x higher than satellite-detected growth.
+- **Added:** `metric_type` field to all benchmarks for unambiguous comparison.
+- **Ref:** Kyba, C.C.M. et al. (2017). Artificially lit surface of Earth at
+  night increasing in radiance and extent. Science Advances, 3(11), e1701528.
+- **Ref:** Kyba, C.C.M. et al. (2023). Citizen scientists report global rapid
+  reductions in the visibility of stars. Science, 379(6629), 265-268.
+- **Files:** `src/formulas/benchmarks.py`, `src/analysis/benchmark_comparison.py`,
+  `tests/test_research_validation.py`, `tests/test_formulas.py`
+
+#### P0-4: VIIRS Limitation Caveats Added (Findings F4, K1, K2, KY3, M1)
+- **Added:** Prominent limitation documentation to `formulas/trend.py` module
+  docstring covering LED spectral bias (~30% underestimate), ground-truth
+  divergence (9.6% vs 2%), electrification confound, and Bortle drift.
+- **Added:** Limitation section to `analysis/sky_brightness_model.py` module
+  docstring and `radiance_to_sky_brightness()` function docstring covering
+  local-pixel-only approximation, LED bias, and missing elevation correction.
+- **Reason:** Three independent factors (spectral bias, electrification,
+  ground-truth gap) mean VIIRS trends cannot be interpreted as pure light
+  pollution growth rates without heavy caveats.
+- **Ref:** Kyba et al. (2017); Kyba et al. (2023); Min et al. (2017);
+  Cinzano & Falchi (2012); Falchi et al. (2016).
+- **Files:** `src/formulas/trend.py`, `src/analysis/sky_brightness_model.py`
+
+#### P0-5: Ecological Sensitivity Weights Documented (Finding B2)
+- **Changed:** Added provenance documentation to `ECOLOGICAL_SENSITIVITY`
+  clarifying that weights (0.1-0.9) are project-specific heuristic estimates,
+  not derived from a published empirical study.
+- **Reason:** Impact scores using these weights should be interpreted as
+  relative rankings only, not calibrated physical quantities.
+- **Ref:** Bennie, J. et al. (2014). Scientific Reports, 4, 3789;
+  Gaston, K.J. et al. (2013). Biological Reviews, 88(4), 912-927.
+- **Files:** `src/formulas/ecology.py`
+
+#### P1-6: New Published Benchmarks Added (Findings K3, KY2)
+- **Added:** Kyba (2023) ground-based 9.6%/yr benchmark and Kyba (2017)
+  1.8%/yr total radiance benchmark. See P0-3 above for details.
+
+#### P1-7: Electrification Confound Documented (Findings M1, M2, M3)
+- **Changed:** Expanded breakpoint analysis module docstring with detailed
+  documentation of India's three overlapping electrification programmes
+  (DDUGJY 2014+, UJALA 2015+, Saubhagya 2017+) and their impact on
+  Maharashtra VIIRS trends.
+- **Added:** Note on rural dark-sky site unreliability — rural areas had 3x
+  worse load-shedding and were primary electrification beneficiaries.
+- **Added:** Recommendation to include electrification milestones as
+  covariates in future breakpoint analysis.
+- **Ref:** Min, B. et al. (2017). Detection of rural electrification in
+  India using DMSP-OLS and VIIRS. Papers in Regional Science, 96(4), 811-832.
+- **Files:** `src/analysis/breakpoint_analysis.py`
+
+#### P1-8: Sky Brightness Local-Pixel Limitation Documented (Findings CF1, F1)
+- See P0-4 above — documented in sky brightness model module and function.
+- **Ref:** Cinzano, P. & Falchi, F. (2012). Monthly Notices of the Royal
+  Astronomical Society, 427(4), 3337-3357.
+
+#### P1-9: CV Stability Thresholds Documented as Heuristics (Findings SE1, SE5)
+- **Changed:** Added provenance documentation to `CV_STABLE_THRESHOLD` (0.2)
+  and `CV_ERRATIC_THRESHOLD` (0.5) clarifying they are project-specific
+  heuristics that do not appear in peer-reviewed VIIRS literature.
+- **Changed:** Updated `classify_stability()` docstring with the same caveat.
+- **Changed:** Updated test docstrings to reflect heuristic status.
+- **Ref:** Small, C. & Elvidge, C.D. (2022). Mapping decadal change in
+  anthropogenic night light. Sensors, 22(12), 4459.
+- **Files:** `src/formulas/diagnostics_thresholds.py`,
+  `src/formulas/classification.py`, `tests/test_research_validation.py`
+
+#### P1-10: Dead `LIT_MASK_THRESHOLD` Removed (Finding E2)
+- **Removed:** `LIT_MASK_THRESHOLD = 0.5` from `formulas/quality.py` and all
+  re-exports in `formulas/__init__.py`.
+- **Removed:** Associated tests in `test_formulas.py` and
+  `test_research_validation.py`.
+- **Reason:** The constant was dead code — the actual lit_mask filter in
+  `apply_quality_filters()` uses `lit_data > 0` (binary mask). The unused
+  constant could mislead developers into thinking a 0.5 threshold was applied.
+- **Ref:** Elvidge et al. (2017, 2021) — VIIRS lit_mask is binary.
+- **Files:** `src/formulas/quality.py`, `src/formulas/__init__.py`,
+  `tests/test_formulas.py`, `tests/test_research_validation.py`
+
+#### P1-11: Light Dome Modeling Renamed (Finding CF2)
+- **Changed:** Module docstring renamed from "Light dome spatial extent
+  modeling" to "Urban radiance footprint modeling" with an explanation
+  distinguishing the two physical phenomena.
+- **Reason:** The exponential decay model describes urban morphology (built-up
+  area tapering at city edges), not atmospheric light propagation, which
+  follows a ~d^(-2.5) power law over ~195 km.
+- **Ref:** Cinzano, P. & Falchi, F. (2012). MNRAS, 427(4), 3337-3357.
+- **Files:** `src/analysis/light_dome_modeling.py`
+
+#### Additional Documentation
+- **Added:** `RADIANCE_TO_MCD` provenance note in `formulas/sky_brightness.py`
+  clarifying it is sourced from Falchi (2016) Bortle category boundary table,
+  not first-principles radiative transfer (findings F2, CF3).
+
 ### Test Coverage Enhancement (DRE-64)
 
 #### 180 New Tests Across 8 Previously Untested Modules
