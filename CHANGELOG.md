@@ -137,6 +137,133 @@ Full finding details in `reports/consolidated_findings.md`.
   clarifying it is sourced from Falchi (2016) Bortle category boundary table,
   not first-principles radiative transfer (findings F2, CF3).
 
+### P2/P3 Methodology Improvements and Documentation (DRE-64)
+
+All remaining priority items from the research paper review (P2: medium
+priority, P3: long-term) implemented below. Item #20 (Falchi World Atlas
+GeoTIFF integration) excluded — requires separate planning as the atlas
+provides only a single 2014-epoch snapshot with no year-over-year utility.
+
+#### P2-12: Multi-Moment Stability Analysis (Findings SE2, SE3)
+- **Added:** Skewness and kurtosis computation to `compute_stability_metrics()`
+  using `scipy.stats.skew()` and `scipy.stats.kurtosis()` with bias correction.
+- **Reason:** Small & Elvidge (2022) show that CV alone discards half of the
+  available distributional information. Positive skew indicates growth
+  acceleration; high kurtosis indicates outlier years.
+- **Ref:** Small, C. & Elvidge, C.D. (2022). Sensors, 22(12), 4459.
+- **Files:** `src/analysis/stability_metrics.py`
+
+#### P2-13: LED Transition Flag (Findings F4, KY3, B5)
+- **Added:** `possible_led_transition` boolean column to stability metrics.
+  Flagged when post-2015 mean radiance is lower than pre-2015 mean, suggesting
+  the HPS→LED transition may be causing apparent dimming in VIIRS data.
+- **Reason:** VIIRS DNB (500-900 nm) is blind to blue LED emissions. India's
+  UJALA programme distributed >360M LED bulbs from 2015+. Districts showing
+  post-2015 radiance decrease may reflect spectral shift, not reduced ALAN.
+- **Ref:** Kyba et al. (2017), Science Advances, 3(11), e1701528.
+- **Files:** `src/analysis/stability_metrics.py`
+
+#### P2-14: Brightening/Dimming Pixel Decomposition (Findings B1, B3)
+- **Added:** `compute_pixel_change_decomposition()` function to viirs_process.py.
+  Decomposes per-district radiance change into percentages of brightening,
+  dimming, and stable pixels between two time periods.
+- **Reason:** Bennie et al. (2014) demonstrate that aggregate district trends
+  mask spatial heterogeneity — a district can show zero net change while having
+  equal brightening and dimming areas.
+- **Ref:** Bennie, J. et al. (2014). Scientific Reports, 4, 3789.
+- **Files:** `src/viirs_process.py`
+
+#### P2-15: Block Bootstrap for Temporal Autocorrelation (Finding E5)
+- **Added:** `block_bootstrap_ci()` function to `formulas/trend.py`. Implements
+  block resampling (default block size = 3 years) that preserves local temporal
+  autocorrelation structure, producing wider (more honest) confidence intervals
+  than standard i.i.d. bootstrap.
+- **Reason:** Standard bootstrap underestimates CI width when annual composites
+  are temporally correlated (VIIRS composites share sensor artifacts, calibration
+  drift, and atmospheric conditions across adjacent years).
+- **Ref:** Kunsch, H.R. (1989). Annals of Statistics, 17(3), 1217-1241.
+- **Files:** `src/formulas/trend.py`
+
+#### P2-16: VIIRS Version Covariate (Finding M7)
+- **Added:** `fit_trend_with_version_covariate()` function to `formulas/trend.py`.
+  Includes a binary dummy variable for the VNL v2.1→v2.2 transition (2014) to
+  absorb the radiometric shift from the stray-light correction change.
+- **Reason:** 34/36 districts show a 2016 breakpoint partly explained by the
+  v2.1 (vcmcfg) → v2.2 (vcmslcfg) product transition. Including the version
+  covariate yields a cleaner estimate of the underlying ALAN trend.
+- **Files:** `src/formulas/trend.py`
+
+#### P2-17: Airglow Confound Documented (Finding L1)
+- **Added:** Airglow caveat to `formulas/trend.py` module docstring. At dark
+  sites, VIIRS radiance includes natural airglow emissions that vary with the
+  ~11-year solar cycle (0.1-0.2 nW/cm²/sr), biasing dark-site trend estimates.
+- **Ref:** Levin, N. et al. (2020). Remote Sensing of Environment, 237, 111443.
+- **Files:** `src/formulas/trend.py`
+
+#### P2-18: DBS Usage Consistency Documented (Finding Z3)
+- **Added:** Explicit DBS usage documentation to `gradient_analysis.py` and
+  `ecological_overlay.py` module docstrings. DBS is intentionally used in
+  visualization/spatial analysis paths but NOT in the main trend analysis path.
+  This is by design, not inconsistency.
+- **Files:** `src/analysis/gradient_analysis.py`, `src/analysis/ecological_overlay.py`
+
+#### P2-19: Elevation Correction for Sky Brightness (Finding CF4)
+- **Added:** `elevation_correction_factor()` function to `sky_brightness_model.py`.
+  Implements first-order atmospheric column correction using scale height (8500 m)
+  for Maharashtra's 0-1400 m elevation range.
+- **Updated:** Module docstring references the new function.
+- **Ref:** Cinzano, P. & Falchi, F. (2012). MNRAS, 427(4), 3337-3357.
+- **Files:** `src/analysis/sky_brightness_model.py`
+
+#### P3-21: Anisotropic Viewing Angle Caveat (Finding Z2)
+- **Added:** Viewing angle caveat to `gradient_analysis.py` module docstring.
+  VIIRS DNB viewing geometry introduces ~50% radiance variability between nadir
+  and edge-of-swath observations, which is not corrected.
+- **Ref:** Zheng, Q. et al. (2019). Remote Sensing, 11(18), 2132.
+- **Files:** `src/analysis/gradient_analysis.py`
+
+#### P3-22: PSF Adjacency Warning (Finding L2)
+- **Added:** PSF spillover warning to `build_site_geodataframe()` docstring.
+  VIIRS DNB PSF half-power diameter is ~750 m; dark-sky sites within 2-3 km
+  of urban areas may have contaminated radiance statistics.
+- **Ref:** Levin, N. et al. (2020). Remote Sensing of Environment, 237, 111443.
+- **Files:** `src/site/site_analysis.py`
+
+#### P3-23: Levin et al. (2020) Cited as Methodological Reference (Finding L3)
+- **Added:** Levin (2020) citation to `viirs_process.py` module docstring,
+  `config.py` VIIRS resolution documentation, and `gradient_analysis.py` DBS note.
+- **Ref:** Levin, N. et al. (2020). Remote Sensing of Night Lights: A Review.
+  Remote Sensing of Environment, 237, 111443.
+- **Files:** `src/viirs_process.py`, `src/config.py`, `src/analysis/gradient_analysis.py`
+
+#### P3-24: vcmcfg Preference in Layer Identification (Finding E4)
+- **Changed:** `identify_layers()` now prefers vcmcfg over vcmslcfg variants
+  when both exist for the same layer type, with documentation explaining why.
+- **Reason:** vcmslcfg includes stray-light correction that changes noise
+  characteristics and can introduce spurious trends at the v2.1→v2.2 boundary.
+- **Ref:** Elvidge, C.D. et al. (2017). Int. J. Remote Sensing, 38(21).
+- **Files:** `src/viirs_process.py`
+
+#### P3-25: Seasonal Aerosol Note for Maharashtra (Finding CF5)
+- **Added:** Seasonal aerosol optical depth caveat to `sky_brightness_model.py`
+  module docstring. Maharashtra experiences significant AOD variation between
+  monsoon and winter that affects sky brightness estimates.
+- **Ref:** Cinzano, P. & Falchi, F. (2012). MNRAS, 427(4), 3337-3357.
+- **Files:** `src/analysis/sky_brightness_model.py`
+
+#### P3-26: Breakpoint Change Type Classification (Finding B4)
+- **Added:** `change_type` field to breakpoint detection output. Classifies each
+  breakpoint as "acceleration", "deceleration", "reversal_to_decline", or
+  "reversal_to_growth" based on pre/post growth rate comparison.
+- **Ref:** Bennie, J. et al. (2014). Scientific Reports, 4, 3789.
+- **Files:** `src/analysis/breakpoint_analysis.py`, `tests/test_breakpoint_analysis.py`
+
+#### Additional Fixes
+- **Fixed:** Negative radiance handling in `breakpoint_analysis.py` — same E1
+  pattern as trend.py. Added `np.clip(radiance, 0, None)` before log transform.
+- **Added:** Fabricated Zheng (2019) citation removed from gradient_analysis.py
+  module docstring; replaced with Bennie (2014) as the methodology reference.
+
 ### Test Coverage Enhancement (DRE-64)
 
 #### 180 New Tests Across 8 Previously Untested Modules

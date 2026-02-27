@@ -76,8 +76,14 @@ def detect_trend_breakpoints(yearly_df, district, entity_col="district"):
         return {
             entity_col: district, "breakpoint_year": None,
             "growth_rate_before": np.nan, "growth_rate_after": np.nan,
+            "change_type": None,
             "p_value": np.nan, "aic_improvement": np.nan,
         }
+
+    # Clip negative radiance to zero before log transform (same as E1 fix
+    # in trend.py). VIIRS DNB can produce small negatives from background
+    # subtraction; log(negative + epsilon) → NaN corrupts the piecewise fit.
+    radiance = np.clip(radiance, 0, None)
 
     log_rad = np.log(radiance + config.LOG_EPSILON)
 
@@ -122,6 +128,7 @@ def detect_trend_breakpoints(yearly_df, district, entity_col="district"):
             "breakpoint_year": None,
             "growth_rate_before": round((np.exp(beta_single) - 1) * 100, 2),
             "growth_rate_after": round((np.exp(beta_single) - 1) * 100, 2),
+            "change_type": None,
             "p_value": np.nan,
             "aic_improvement": 0.0,
         }
@@ -135,11 +142,25 @@ def detect_trend_breakpoints(yearly_df, district, entity_col="district"):
     # Test if interaction term is significant
     p_value = best_result.pvalues[3] if len(best_result.pvalues) > 3 else np.nan
 
+    # Classify the change type at the breakpoint (finding B4):
+    # acceleration = growth rate increased; deceleration = decreased;
+    # reversal = changed sign (growth → decline or vice versa).
+    # Ref: Bennie, J. et al. (2014). Scientific Reports, 4, 3789.
+    if growth_before >= 0 and growth_after < 0:
+        change_type = "reversal_to_decline"
+    elif growth_before < 0 and growth_after >= 0:
+        change_type = "reversal_to_growth"
+    elif abs(growth_after) > abs(growth_before):
+        change_type = "acceleration"
+    else:
+        change_type = "deceleration"
+
     return {
         entity_col: district,
         "breakpoint_year": int(best_bp),
         "growth_rate_before": round(growth_before, 2),
         "growth_rate_after": round(growth_after, 2),
+        "change_type": change_type,
         "p_value": round(p_value, 6) if not np.isnan(p_value) else np.nan,
         "aic_improvement": round(aic_single - best_aic, 2),
     }

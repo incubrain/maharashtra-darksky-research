@@ -201,6 +201,11 @@ VIIRS_VERSION_MAPPING = {
     2022: "v22", 2023: "v22", 2024: "v22",
 }
 
+# VIIRS DNB resolution: ~15 arc-seconds grid (~450 m at equator).
+# Native sensor resolution is ~750 m; the 15 arc-second grid is the
+# resampled annual composite product resolution.
+# Ref: Levin, N. et al. (2020). Remote Sensing of Night Lights: A Review.
+#      Remote Sensing of Environment, 237, 111443. Table 1.
 VIIRS_RESOLUTION_DEG = 0.004166667  # ~15 arc-seconds
 
 # ─── VISUALIZATION PARAMETERS ────────────────────────────────────────────

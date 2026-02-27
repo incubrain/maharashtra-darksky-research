@@ -23,6 +23,14 @@ log = get_pipeline_logger(__name__)
 def compute_stability_metrics(yearly_df, entity_col="district", output_csv=None):
     """Compute temporal stability metrics for each district/site.
 
+    Includes skewness and kurtosis following Small & Elvidge (2022) who
+    demonstrate that multi-moment analysis (mean + variance + skewness +
+    kurtosis) better distinguishes physically distinct lighting zones than
+    single-metric CV classification alone.
+
+    Ref: Small, C. & Elvidge, C.D. (2022). Mapping decadal change in
+    anthropogenic night light. Sensors, 22(12), 4459.
+
     Args:
         yearly_df: DataFrame with [entity_col, year, median_radiance].
         entity_col: Column name for grouping ("district" or "name").
@@ -30,9 +38,11 @@ def compute_stability_metrics(yearly_df, entity_col="district", output_csv=None)
 
     Returns:
         DataFrame with columns: [entity, mean_radiance_2012_2024,
-        std_radiance, coefficient_of_variation, iqr,
-        max_year_to_year_change, stability_class].
+        std_radiance, coefficient_of_variation, skewness, kurtosis,
+        iqr, max_year_to_year_change, stability_class].
     """
+    from scipy import stats as sp_stats
+
     results = []
     for entity in yearly_df[entity_col].unique():
         sub = yearly_df[yearly_df[entity_col] == entity].sort_values("year")
@@ -50,17 +60,38 @@ def compute_stability_metrics(yearly_df, entity_col="district", output_csv=None)
         diffs = np.abs(np.diff(values))
         max_change = np.max(diffs) if len(diffs) > 0 else 0.0
 
+        # Higher moments (finding SE2): skewness and kurtosis provide
+        # additional distributional information that CV alone discards.
+        # Positive skew = growth acceleration; high kurtosis = outlier years.
+        skewness = float(sp_stats.skew(values, bias=False)) if len(values) >= 3 else np.nan
+        kurtosis = float(sp_stats.kurtosis(values, bias=False)) if len(values) >= 4 else np.nan
+
         # Classify stability
         stability = classify_stability(cv)
+
+        # LED transition flag (findings F4, KY3, B5): if post-2015 data
+        # shows radiance *decrease*, it may reflect HPS→LED transition rather
+        # than genuine ALAN reduction. VIIRS DNB (500-900 nm) is blind to
+        # blue LED emissions, so LED adoption can appear as dimming.
+        # Ref: Kyba et al. (2017), Science Advances, 3(11), e1701528.
+        led_flag = False
+        pre_vals = sub.loc[sub["year"] < 2015, "median_radiance"].dropna().values
+        post_vals = sub.loc[sub["year"] >= 2015, "median_radiance"].dropna().values
+        if len(pre_vals) > 0 and len(post_vals) > 0:
+            if np.mean(post_vals) < np.mean(pre_vals):
+                led_flag = True
 
         results.append({
             entity_col: entity,
             "mean_radiance_2012_2024": round(mean_val, 4),
             "std_radiance": round(std_val, 4),
             "coefficient_of_variation": round(cv, 4),
+            "skewness": round(skewness, 4) if not np.isnan(skewness) else np.nan,
+            "kurtosis": round(kurtosis, 4) if not np.isnan(kurtosis) else np.nan,
             "iqr": round(iqr, 4),
             "max_year_to_year_change": round(max_change, 4),
             "stability_class": stability,
+            "possible_led_transition": led_flag,
         })
 
     df = pd.DataFrame(results)

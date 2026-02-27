@@ -24,7 +24,14 @@ IMPORTANT LIMITATIONS:
   Ref: Kyba et al. (2023), Science, 379(6629), 265-268.
 - **No elevation correction (CF4):** Maharashtra ranges from sea level to
   ~1400 m; atmospheric column depth affects scattering efficiency but is
-  not accounted for here.
+  not accounted for here. A first-order correction factor is available via
+  elevation_correction_factor() in this module.
+- **Seasonal aerosol variation (CF5):** Maharashtra experiences significant
+  aerosol optical depth (AOD) variation between monsoon (low AOD, clearer
+  skies) and winter/pre-monsoon (high AOD, more scattering). Annual
+  composites mask this seasonal variation, which affects sky brightness
+  estimates by up to ~0.5 mag at high-AOD sites.
+  Ref: Cinzano, P. & Falchi, F. (2012). MNRAS, 427(4), 3337-3357.
 """
 
 from src.logging_config import get_pipeline_logger
@@ -83,6 +90,39 @@ def radiance_to_sky_brightness(radiance_nw):
     mag = -2.5 * np.log10(total_mcd / REFERENCE_MCD)
 
     return mag
+
+
+def elevation_correction_factor(elevation_m):
+    """First-order elevation correction for sky brightness estimates.
+
+    At higher elevations, the shorter atmospheric column reduces Rayleigh
+    scattering, making the sky darker for the same upward radiance.
+    This implements a simple exponential correction based on atmospheric
+    scale height.
+
+    Finding CF4: Maharashtra ranges from sea level to ~1400 m (Mahabaleshwar,
+    Bhandardara). Without correction, hill-station sites appear ~0.1-0.3
+    mag brighter than they actually are.
+
+    Ref: Cinzano, P. & Falchi, F. (2012). MNRAS, 427(4), 3337-3357 —
+    atmospheric column parameterisation for light propagation.
+
+    Parameters
+    ----------
+    elevation_m : float or array-like
+        Elevation above sea level in metres.
+
+    Returns
+    -------
+    float or array
+        Multiplicative correction factor for sky brightness (in mcd/m²).
+        Apply as: corrected_mcd = mcd * elevation_correction_factor(elev).
+        Values < 1.0 indicate reduced scattering at elevation.
+    """
+    elevation_m = np.asarray(elevation_m, dtype=float)
+    # Atmospheric scale height ~8500 m (Rayleigh scattering)
+    scale_height = 8500.0
+    return np.exp(-elevation_m / scale_height)
 
 
 def classify_bortle(mag_arcsec2):

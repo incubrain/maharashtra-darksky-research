@@ -86,7 +86,7 @@ class TestBreakpointDetection:
         result = detect_trend_breakpoints(df, "D")
         expected_keys = {
             "district", "breakpoint_year", "growth_rate_before",
-            "growth_rate_after", "p_value", "aic_improvement"
+            "growth_rate_after", "change_type", "p_value", "aic_improvement"
         }
         assert expected_keys == set(result.keys())
 

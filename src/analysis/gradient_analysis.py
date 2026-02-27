@@ -5,11 +5,33 @@ Extracts mean/median radiance at concentric rings around city centres
 to quantify light spillover extent and identify "dark zones".
 
 METHODOLOGY:
-Following Zheng et al. (2019) anisotropic ALAN investigation:
-"Radial extraction at 1, 5, 10, 20, 50 km from city centres characterises
-the exponential decay of urban light domes."
-Citation: Zheng, Q. et al. (2019). Developing a new cross-sensor calibration
-          model. Remote Sensing, 11(18), 2132.
+Radial extraction at concentric distances from city centres characterises
+the spatial decay of urban nighttime light. Standard approach in NTL
+literature for analysing urban-rural light gradients.
+Ref: Bennie, J. et al. (2014). Contrasting trends in light pollution
+     across Europe. Scientific Reports, 4, 3789.
+
+NOTE ON DBS USAGE (finding Z3, review 2026-02-27):
+This module applies Dynamic Background Subtraction (DBS) via
+viirs_utils.apply_dynamic_background_subtraction() to radiance rasters
+before gradient extraction. DBS is intentionally used here (and in
+ecological_overlay.py) to remove the background noise floor for
+visualization and spatial analysis purposes. The main zonal statistics
+path in viirs_process.py does NOT apply DBS — raw quality-filtered
+radiance is preserved for trend analysis. This is by design:
+  - DBS for gradient/visualization: removes noise floor for cleaner
+    spatial decay curves
+  - No DBS for trend/stability: preserves absolute radiance for temporal
+    comparisons
+Ref: Levin, N. et al. (2020). Remote Sensing of Night Lights: A Review.
+     Remote Sensing of Environment, 237, 111443.
+
+VIEWING ANGLE CAVEAT (finding Z2, review 2026-02-27):
+VIIRS DNB viewing geometry introduces ~50% radiance variability between
+nadir and edge-of-swath observations. This anisotropic effect is NOT
+corrected in this analysis. Radial profiles assume isotropic measurement,
+which may introduce systematic bias for cities observed at high view angles.
+Ref: Zheng, Q. et al. (2019). Remote Sensing, 11(18), 2132.
 """
 
 from src.logging_config import get_pipeline_logger
