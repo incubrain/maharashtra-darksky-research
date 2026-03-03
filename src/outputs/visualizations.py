@@ -31,7 +31,6 @@ from shapely.geometry import Point, mapping
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path as MplPath
 from scipy import stats
-from scipy.ndimage import gaussian_filter, zoom
 from src import config
 
 log = logging.getLogger(__name__)
@@ -541,7 +540,7 @@ def generate_light_increase_frames(years, output_dir, district_gdf,
 
         im = ax.imshow(display_data, extent=extent, cmap="magma",
                        vmin=-2, vmax=2, origin="upper", aspect="auto",
-                       interpolation="bilinear")
+                       interpolation="nearest")
 
         cbar = plt.colorbar(im, ax=ax, shrink=0.6)
         cbar.ax.yaxis.set_tick_params(color='white')
@@ -657,14 +656,10 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
                                        0.0, clipped_data)
                 display_data = np.log10(np.clip(data_filled, 0.01, None))
 
-                # Gaussian smooth + upsample for clean rendering at
-                # district zoom level (raw VIIRS ~450m pixels are blocky)
-                display_smooth = gaussian_filter(display_data, sigma=2.0)
-                display_up = zoom(display_smooth, 3, order=1)
-
                 im = ax.imshow(
-                    display_up, extent=clipped_extent, cmap="magma",
+                    display_data, extent=clipped_extent, cmap="magma",
                     vmin=-2, vmax=2, origin="upper", aspect="auto",
+                    interpolation="nearest",
                 )
 
                 # Clip raster to district polygon (hides exterior fill)
