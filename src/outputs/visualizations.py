@@ -7,7 +7,10 @@ import rasterio.transform
 import matplotlib.pyplot as plt
 import geopandas as gpd
 from shapely.geometry import mapping
+from matplotlib.patches import PathPatch
+from matplotlib.path import Path as MplPath
 from scipy import stats
+from scipy.ndimage import gaussian_filter, zoom
 from src import config
 from src import viirs_utils
 
@@ -27,11 +30,49 @@ def _add_annotation(ax, text):
             ha="right", va="bottom",
             bbox=dict(boxstyle="round,pad=0.5", fc="black", alpha=0.7, ec="white"))
 
-def _load_raster(output_dir, year):
+def _make_clip_patch(gdf_subset, ax):
+    """Create a matplotlib clip path from a GeoDataFrame's geometry."""
+    verts = []
+    codes = []
+    for geom_part in gdf_subset.geometry.values:
+        polys = (geom_part.geoms if hasattr(geom_part, 'geoms')
+                 else [geom_part])
+        for poly in polys:
+            ring = np.array(poly.exterior.coords)
+            verts.extend(ring.tolist())
+            codes.extend(
+                [MplPath.MOVETO]
+                + [MplPath.LINETO] * (len(ring) - 2)
+                + [MplPath.CLOSEPOLY]
+            )
+    patch = PathPatch(
+        MplPath(verts, codes), transform=ax.transData,
+        facecolor='none', edgecolor='none'
+    )
+    ax.add_patch(patch)
+    return patch
+
+
+def _load_raster(output_dir, year, dbs_floor=None):
     """
     Helper to load a specific year's median raster.
-    Applies Dynamic Background Subtraction (DBS) using the 1st percentile (P01)
-    as the year-specific noise floor.
+
+    Applies Dynamic Background Subtraction (DBS).  When *dbs_floor* is
+    provided the same fixed floor is used for every year so that
+    cross-year comparisons are apples-to-apples (avoids the artefact
+    where rising P01 noise floors make early years look artificially
+    brighter or later years artificially dimmer).
+
+    Parameters
+    ----------
+    dbs_floor : float, optional
+        Fixed noise floor to subtract.  When ``None`` (default) the
+        per-year P01 floor is computed dynamically.
+
+    Returns
+    -------
+    tuple[np.ndarray | None, list | None]
+        (data, extent) or (None, None) if the file is missing.
     """
     subset_dir = os.path.join(output_dir, "subsets", str(year))
     median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
@@ -42,10 +83,28 @@ def _load_raster(output_dir, year):
         data = src.read(1)
         extent = [src.bounds.left, src.bounds.right, src.bounds.bottom, src.bounds.top]
 
-    # Dynamic Background Subtraction using central utility
-    data = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
+    if dbs_floor is not None:
+        # Fixed-floor DBS: subtract the same baseline from every year
+        data = np.maximum(0, data - dbs_floor)
+    else:
+        # Dynamic per-year DBS (original behaviour)
+        data = viirs_utils.apply_dynamic_background_subtraction(data, year=year)
 
     return data, extent
+
+
+def _compute_dbs_floor(output_dir, year, percentile=1.0):
+    """Compute the P01 noise floor for a single year's state raster."""
+    subset_dir = os.path.join(output_dir, "subsets", str(year))
+    median_path = os.path.join(subset_dir, f"maharashtra_median_{year}.tif")
+    if not os.path.exists(median_path):
+        return None
+    with rasterio.open(median_path) as src:
+        data = src.read(1)
+    valid = data[np.isfinite(data) & (data > 0)]
+    if len(valid) == 0:
+        return None
+    return float(np.percentile(valid, percentile))
 
 def generate_sprawl_frames(years, output_dir, district_gdf,
                            threshold_nw=config.SPRAWL_THRESHOLD_NW,
@@ -72,8 +131,11 @@ def generate_sprawl_frames(years, output_dir, district_gdf,
     os.makedirs(frame_dir, exist_ok=True)
     log.info("Generating Sprawl frames in %s...", frame_dir)
 
+    # Fixed DBS floor from baseline year for consistent cross-year comparison
+    dbs_floor = _compute_dbs_floor(output_dir, min(years))
+
     for year in years:
-        data, extent = _load_raster(output_dir, year)
+        data, extent = _load_raster(output_dir, year, dbs_floor=dbs_floor)
         if data is None: continue
 
         # Binary mask
@@ -129,13 +191,15 @@ def generate_differential_frames(years, output_dir, district_gdf,
     log.info("Generating Differential frames in %s...", frame_dir)
 
     baseline_year = min(years)
-    base_data, extent = _load_raster(output_dir, baseline_year)
+    # Fixed DBS floor from baseline year for consistent cross-year comparison
+    dbs_floor = _compute_dbs_floor(output_dir, baseline_year)
+    base_data, extent = _load_raster(output_dir, baseline_year, dbs_floor=dbs_floor)
     if base_data is None:
         log.error("Baseline year %s data missing.", baseline_year)
         return
 
     for year in years:
-        data, _ = _load_raster(output_dir, year)
+        data, _ = _load_raster(output_dir, year, dbs_floor=dbs_floor)
         if data is None: continue
 
         diff = data - base_data
@@ -193,8 +257,11 @@ def generate_darkness_frames(years, output_dir, district_gdf,
     os.makedirs(frame_dir, exist_ok=True)
     log.info("Generating Darkness frames in %s...", frame_dir)
 
+    # Fixed DBS floor from baseline year for consistent cross-year comparison
+    dbs_floor = _compute_dbs_floor(output_dir, min(years))
+
     for year in years:
-        data, extent = _load_raster(output_dir, year)
+        data, extent = _load_raster(output_dir, year, dbs_floor=dbs_floor)
         if data is None: continue
 
         # Dark mask
@@ -247,15 +314,18 @@ def generate_trend_map(years, output_dir, district_gdf, maps_output_dir=None):
     os.makedirs(maps_output_dir, exist_ok=True)
     log.info("Generating Trend Map...")
 
+    # Fixed DBS floor from baseline year for consistent cross-year comparison
+    dbs_floor = _compute_dbs_floor(output_dir, years[0])
+
     # Load all years into a stack
     stack = []
     valid_years = []
 
-    ref_raster, extent = _load_raster(output_dir, years[0])
+    ref_raster, extent = _load_raster(output_dir, years[0], dbs_floor=dbs_floor)
     if ref_raster is None: return
 
     for year in years:
-        data, _ = _load_raster(output_dir, year)
+        data, _ = _load_raster(output_dir, year, dbs_floor=dbs_floor)
         if data is not None:
             stack.append(data)
             valid_years.append(year)
@@ -326,12 +396,14 @@ def generate_light_increase_frames(years, output_dir, district_gdf,
     log.info("Generating Light Increase frames in %s...", frame_dir)
 
     baseline_year = min(years)
-    baseline_data, _ = _load_raster(output_dir, baseline_year)
+    # Fixed DBS floor from baseline year for consistent cross-year comparison
+    dbs_floor = _compute_dbs_floor(output_dir, baseline_year)
+    baseline_data, _ = _load_raster(output_dir, baseline_year, dbs_floor=dbs_floor)
     baseline_mean = (float(np.nanmean(baseline_data))
                      if baseline_data is not None else None)
 
     for year in years:
-        data, extent = _load_raster(output_dir, year)
+        data, extent = _load_raster(output_dir, year, dbs_floor=dbs_floor)
         if data is None:
             continue
 
@@ -412,6 +484,9 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
     log.info("Generating per-district radiance frames in %s...", frames_base)
 
     baseline_year = min(years)
+    # Fixed DBS floor from baseline year's state raster so all districts
+    # and years use the same noise baseline for consistent comparison.
+    dbs_floor = _compute_dbs_floor(output_dir, baseline_year)
     total_count = 0
     for _, row in district_gdf.iterrows():
         district_name = row["district"]
@@ -440,9 +515,13 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
                         clipped_transform
                     )
 
-                clipped_data = viirs_utils.apply_dynamic_background_subtraction(
-                    clipped_data, year=year
-                )
+                # Fixed-floor DBS using state-level baseline P01
+                if dbs_floor is not None:
+                    clipped_data = np.maximum(0, clipped_data - dbs_floor)
+                else:
+                    clipped_data = viirs_utils.apply_dynamic_background_subtraction(
+                        clipped_data, year=year
+                    )
 
                 clipped_extent = [
                     clipped_bounds[0], clipped_bounds[2],
@@ -452,19 +531,28 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
                 fig, ax = plt.subplots(figsize=(10, 9))
                 fig.patch.set_facecolor('black')
 
-                display_data = np.log10(np.clip(clipped_data, 0.01, None))
-                display_data = np.where(np.isfinite(display_data),
-                                        display_data, np.nan)
+                # Fill NaN (outside boundary) with 0 before log-scale
+                data_filled = np.where(np.isnan(clipped_data),
+                                       0.0, clipped_data)
+                display_data = np.log10(np.clip(data_filled, 0.01, None))
+
+                # Gaussian smooth + upsample for clean rendering at
+                # district zoom level (raw VIIRS ~450m pixels are blocky)
+                display_smooth = gaussian_filter(display_data, sigma=2.0)
+                display_up = zoom(display_smooth, 3, order=1)
 
                 im = ax.imshow(
-                    display_data, extent=clipped_extent, cmap="magma",
+                    display_up, extent=clipped_extent, cmap="magma",
                     vmin=-2, vmax=2, origin="upper", aspect="auto",
-                    interpolation="bilinear"
                 )
 
+                # Clip raster to district polygon (hides exterior fill)
                 single_gdf = district_gdf[
                     district_gdf["district"] == district_name
                 ]
+                clip_path = _make_clip_patch(single_gdf, ax)
+                im.set_clip_path(clip_path)
+
                 single_gdf.boundary.plot(
                     ax=ax, edgecolor="white", linewidth=1.0, alpha=0.8
                 )
