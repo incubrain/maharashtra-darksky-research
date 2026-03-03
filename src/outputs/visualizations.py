@@ -327,7 +327,8 @@ def generate_light_increase_frames(years, output_dir, district_gdf,
 
     baseline_year = min(years)
     baseline_data, _ = _load_raster(output_dir, baseline_year)
-    prev_mean = None
+    baseline_mean = (float(np.nanmean(baseline_data))
+                     if baseline_data is not None else None)
 
     for year in years:
         data, extent = _load_raster(output_dir, year)
@@ -342,7 +343,8 @@ def generate_light_increase_frames(years, output_dir, district_gdf,
         display_data = np.where(np.isfinite(display_data), display_data, np.nan)
 
         im = ax.imshow(display_data, extent=extent, cmap="magma",
-                       vmin=-2, vmax=2, origin="upper", aspect="auto")
+                       vmin=-2, vmax=2, origin="upper", aspect="auto",
+                       interpolation="bilinear")
 
         cbar = plt.colorbar(im, ax=ax, shrink=0.6)
         cbar.ax.yaxis.set_tick_params(color='white')
@@ -351,20 +353,19 @@ def generate_light_increase_frames(years, output_dir, district_gdf,
 
         # Compute statistics
         current_mean = float(np.nanmean(data))
-        yoy_change = ""
-        if prev_mean is not None:
-            delta = current_mean - prev_mean
-            yoy_change = f"\nYoY Change: {delta:+.3f} nW"
 
-        total_change = ""
-        if baseline_data is not None and year != baseline_year:
-            diff = current_mean - float(np.nanmean(baseline_data))
-            total_change = f"\nvs {baseline_year}: {diff:+.3f} nW"
+        baseline_text = ""
+        if baseline_mean and baseline_mean > 0 and year != baseline_year:
+            abs_change = current_mean - baseline_mean
+            pct_change = (abs_change / baseline_mean) * 100
+            baseline_text = (
+                f"\nvs {baseline_year}: {abs_change:+.3f} nW ({pct_change:+.1f}%)"
+            )
 
         text = (
             f"Year: {year}\n"
             f"Mean Radiance: {current_mean:.3f} nW"
-            f"{yoy_change}{total_change}"
+            f"{baseline_text}"
         )
         _add_annotation(ax, text)
 
@@ -376,7 +377,6 @@ def generate_light_increase_frames(years, output_dir, district_gdf,
                     facecolor='black')
         plt.close(fig)
         log.info("Generated: %s", path)
-        prev_mean = current_mean
 
 
 def generate_per_district_radiance_frames(years, output_dir, district_gdf,
@@ -411,6 +411,7 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
     os.makedirs(frames_base, exist_ok=True)
     log.info("Generating per-district radiance frames in %s...", frames_base)
 
+    baseline_year = min(years)
     total_count = 0
     for _, row in district_gdf.iterrows():
         district_name = row["district"]
@@ -418,7 +419,7 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
         district_frame_dir = os.path.join(frames_base, safe_name)
         os.makedirs(district_frame_dir, exist_ok=True)
 
-        prev_mean = None
+        baseline_mean = None
 
         for year in years:
             subset_dir = os.path.join(output_dir, "subsets", str(year))
@@ -457,7 +458,8 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
 
                 im = ax.imshow(
                     display_data, extent=clipped_extent, cmap="magma",
-                    vmin=-2, vmax=2, origin="upper", aspect="auto"
+                    vmin=-2, vmax=2, origin="upper", aspect="auto",
+                    interpolation="bilinear"
                 )
 
                 single_gdf = district_gdf[
@@ -475,15 +477,22 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
 
                 # Stats annotation
                 current_mean = float(np.nanmean(clipped_data))
-                yoy_text = ""
-                if prev_mean is not None:
-                    delta = current_mean - prev_mean
-                    yoy_text = f"\nYoY: {delta:+.3f} nW"
+                if baseline_mean is None:
+                    baseline_mean = current_mean
+
+                baseline_text = ""
+                if baseline_mean > 0 and year != baseline_year:
+                    abs_change = current_mean - baseline_mean
+                    pct_change = (abs_change / baseline_mean) * 100
+                    baseline_text = (
+                        f"\nvs {baseline_year}: "
+                        f"{abs_change:+.3f} nW ({pct_change:+.1f}%)"
+                    )
 
                 text = (
                     f"Year: {year}\n"
                     f"Mean: {current_mean:.3f} nW"
-                    f"{yoy_text}"
+                    f"{baseline_text}"
                 )
                 ax.text(0.98, 0.02, text, transform=ax.transAxes,
                         fontsize=12, fontweight="bold", color="white",
@@ -504,7 +513,6 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
                             facecolor='black')
                 plt.close(fig)
                 total_count += 1
-                prev_mean = current_mean
 
             except Exception as exc:
                 log.warning(
