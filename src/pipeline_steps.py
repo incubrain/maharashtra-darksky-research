@@ -491,6 +491,8 @@ def step_animation_frames(
 ) -> tuple:
     """Generate animation frames (sprawl, differential, darkness) and trend map."""
     from src.outputs.visualizations import (
+        compute_dark_reference_backgrounds,
+        save_dark_reference_audit,
         generate_sprawl_frames,
         generate_differential_frames,
         generate_darkness_frames,
@@ -498,14 +500,20 @@ def step_animation_frames(
     )
 
     def _work():
+        backgrounds, audit = compute_dark_reference_backgrounds(output_dir, years)
+        save_dark_reference_audit(audit, output_dir)
         frame_counts = {}
-        generate_sprawl_frames(years, output_dir, gdf, maps_output_dir=maps_dir)
+        generate_sprawl_frames(years, output_dir, gdf, maps_output_dir=maps_dir,
+                               backgrounds=backgrounds)
         frame_counts["sprawl"] = len(years)
-        generate_differential_frames(years, output_dir, gdf, maps_output_dir=maps_dir)
+        generate_differential_frames(years, output_dir, gdf, maps_output_dir=maps_dir,
+                                     backgrounds=backgrounds)
         frame_counts["differential"] = len(years)
-        generate_darkness_frames(years, output_dir, gdf, maps_output_dir=maps_dir)
+        generate_darkness_frames(years, output_dir, gdf, maps_output_dir=maps_dir,
+                                 backgrounds=backgrounds)
         frame_counts["darkness"] = len(years)
-        generate_trend_map(years, output_dir, gdf, maps_output_dir=maps_dir)
+        generate_trend_map(years, output_dir, gdf, maps_output_dir=maps_dir,
+                           backgrounds=backgrounds)
         frame_counts["trend_map"] = 1
         return frame_counts
 
@@ -523,11 +531,18 @@ def step_per_district_radiance_maps(
     maps_dir: str = None,
 ) -> tuple:
     """Generate per-district zoomed radiance raster maps."""
-    from src.outputs.visualizations import generate_per_district_radiance_maps
+    from src.outputs.visualizations import (
+        compute_dark_reference_backgrounds,
+        generate_per_district_radiance_maps,
+    )
 
     def _work():
+        backgrounds, _ = compute_dark_reference_backgrounds(
+            output_dir, [latest_year],
+        )
         return generate_per_district_radiance_maps(
             output_dir, latest_year, gdf, maps_output_dir=maps_dir,
+            backgrounds=backgrounds,
         )
 
     return run_step(
@@ -545,18 +560,24 @@ def step_light_increase_frames(
 ) -> tuple:
     """Generate state-level light increase + per-district radiance frames."""
     from src.outputs.visualizations import (
+        compute_dark_reference_backgrounds,
+        save_dark_reference_audit,
         generate_light_increase_frames,
         generate_per_district_radiance_frames,
     )
 
     def _work():
+        backgrounds, audit = compute_dark_reference_backgrounds(output_dir, years)
+        save_dark_reference_audit(audit, output_dir)
         counts = {}
         generate_light_increase_frames(
             years, output_dir, gdf, maps_output_dir=maps_dir,
+            backgrounds=backgrounds,
         )
         counts["light_increase"] = len(years)
         district_count = generate_per_district_radiance_frames(
             years, output_dir, gdf, maps_output_dir=maps_dir,
+            backgrounds=backgrounds,
         )
         counts["district_frames"] = district_count
         return counts
