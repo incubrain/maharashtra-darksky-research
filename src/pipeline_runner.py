@@ -139,6 +139,8 @@ DISTRICT_STEPS = [
     "district_reports",
     "animation_frames",
     "per_district_radiance_maps",
+    "light_increase_frames",
+    "assemble_gifs",
     # Cross-dataset steps (gated by --datasets)
     "load_datasets",
     "merge_datasets",
@@ -180,6 +182,8 @@ def run_district_pipeline(args, single_step=None):
         step_district_reports,
         step_animation_frames,
         step_per_district_radiance_maps,
+        step_light_increase_frames,
+        step_assemble_gifs,
     )
     import geopandas as gpd
 
@@ -357,6 +361,20 @@ def run_district_pipeline(args, single_step=None):
     if not result.ok:
         log.warning("Per-district radiance maps failed: %s", result.error)
 
+    # Step 18: Light increase frames (state-level + per-district per-year)
+    result, _ = step_light_increase_frames(
+        years, args.output_dir, gdf, maps_dir=maps_dir,
+    )
+    pipeline_result.step_results.append(result)
+    if not result.ok:
+        log.warning("Light increase frames failed: %s", result.error)
+
+    # Step 19: Assemble GIFs from all frame directories
+    result, _ = step_assemble_gifs(maps_dir)
+    pipeline_result.step_results.append(result)
+    if not result.ok:
+        log.warning("GIF assembly failed: %s", result.error)
+
     # ── Cross-dataset steps (only if datasets enabled) ────────────
     from src.dataset_aggregator import get_enabled_datasets, get_dataset_suffix
 
@@ -442,6 +460,8 @@ def _run_single_district_step(step_name, args, years, dirs, pipeline_result):
         step_graduated_classification,
         step_animation_frames,
         step_per_district_radiance_maps,
+        step_light_increase_frames,
+        step_assemble_gifs,
     )
     import geopandas as gpd
 
@@ -502,6 +522,16 @@ def _run_single_district_step(step_name, args, years, dirs, pipeline_result):
             lambda gdf: step_per_district_radiance_maps(
                 args.output_dir, max(years), gdf, maps_dir=maps_dir,
             ),
+        ),
+        "light_increase_frames": (
+            _load_gdf,
+            lambda gdf: step_light_increase_frames(
+                years, args.output_dir, gdf, maps_dir=maps_dir,
+            ),
+        ),
+        "assemble_gifs": (
+            lambda: True,  # no data dependency
+            lambda _: step_assemble_gifs(maps_dir),
         ),
     }
 

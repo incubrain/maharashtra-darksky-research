@@ -5,19 +5,18 @@ Identifies years where ALAN growth rate changed significantly
 (acceleration/deceleration) using AIC-based model selection.
 
 KNOWN FINDING — Universal 2016 Breakpoint:
-    In full diagnostic runs against VNL v2.1/v2.2 annual composites for
-    Maharashtra (2012–2024), 34 out of 36 districts show a breakpoint in
-    2016.  This is driven by TWO confounded factors:
+    34 of 36 Maharashtra districts show a piecewise-regression breakpoint
+    at 2016.  This likely reflects a combination of:
 
-    1. VIIRS product evolution:
-       - 2012–2013: vcmcfg (no stray-light correction) — baseline noise
-         is lower, broad-area radiance is systematically fainter.
-       - 2014+:     vcmslcfg (stray-light corrected) — improved
-         calibration and noise floor shift.
-       - The 2016 detection is an artifact of the AIC model selecting the
-         year that best separates the two radiometric regimes.
+    1. VIIRS composite evolution: 2012–2013 use vcmcfg inputs (no
+       stray-light correction); 2014+ use vcmslcfg.  The resulting
+       shift in noise characteristics can cause an AIC-optimal split
+       near the transition.
+    2. Real-world electrification: DDUGJY rural electrification
+       (2015–2019) and the Ujala LED programme (2015+) drove genuine
+       step-changes in nighttime radiance across rural Maharashtra.
 
-    2. Electrification confound (findings M1, M2, M3):
+    3. Electrification confound (findings M1, M2, M3):
        India's three overlapping rural electrification programmes coincide
        exactly with the VIIRS study period:
        - DDUGJY (2014+): Rural grid infrastructure, ~18,000 villages
@@ -28,11 +27,17 @@ KNOWN FINDING — Universal 2016 Breakpoint:
        Ref: Min, B. et al. (2017). Detection of rural electrification in
        India using DMSP-OLS and VIIRS. Papers in Regional Science, 96(4).
 
-    3. Rural dark-sky site unreliability (M3):
+    4. Rural dark-sky site unreliability (M3):
        Rural areas had 3x worse load-shedding than urban centres and were
        primary electrification beneficiaries. Dark-sky site trends are
        especially confounded — apparent brightening may reflect improved
        electricity supply rather than new light installations.
+
+    Visualization background correction now uses dark-reference-area
+    subtraction (Coesfeld et al. 2020) instead of per-year P01 DBS,
+    which reduces the radiometric artefact component.  However, the
+    breakpoint analysis operates on zonal-statistics radiance (no DBS),
+    so the confound persists in this module's output.
 
     IMPLICATION: A single-breakpoint model is too coarse for this data.
     Future work should consider:

@@ -5,27 +5,25 @@ log = logging.getLogger(__name__)
 
 def apply_dynamic_background_subtraction(raster, year=None, percentile=1.0):
     """
-    Applies Dynamic Background Subtraction (DBS) to a radiance raster.
+    Per-year P01 background subtraction (legacy — used only in diagnostics).
 
-    Identifies the noise floor using a low percentile (default 1%) of valid
-    (finite and >0) pixels and subtracts it from the entire array.
+    Computes the 1st-percentile of valid (finite & > 0) pixels in *raster*
+    and subtracts it uniformly.  This was the original background correction
+    but has a **known limitation**: the P01 floor rises over the study
+    period (0.10 nW in 2012 → 0.49 nW in 2024) because later NOAA EOG
+    composites retain more dim pixels, not because of real radiance change.
+    Subtracting a larger floor from later years systematically compresses
+    the observed growth trend.
 
-    KNOWN BEHAVIOR — Rising Background Floor:
-        The P1.0 background floor increases over the study period
-        (e.g., 0.10 nW in 2012 → 0.49 nW in 2024 for Maharashtra).
-        This is NOT a pipeline bug but a characteristic of the VIIRS VNL
-        annual composite product, caused by:
+    For time-series visualizations, ``compute_dark_reference_backgrounds()``
+    in ``src/outputs/visualizations.py`` should be used instead — it samples
+    three protected-area dark-sky sites per year (Pench, Tadoba, Yawal) and
+    subtracts a physically-meaningful natural background estimate following
+    Coesfeld et al. (2020).
 
-        1. NOAA EOG background masking evolution — later composites
-           retain more dim/background pixels that were previously zeroed.
-        2. Stray-light correction changes: vcmcfg (2012-2013) vs
-           vcmslcfg (2014+) have different noise characteristics.
-        3. NPP→NOAA-20 satellite transition (2018+) introduces
-           cross-sensor calibration offsets.
-
-        The DBS function is used ONLY in visualization/quality diagnostics
-        (gradient analysis, annual map frames), not in the main zonal
-        statistics path where raw radiance is preserved.
+    This function is retained for single-year diagnostic plots (gradient
+    analysis, quality diagnostics, ecological overlay) where cross-year
+    consistency is not required.
 
     Args:
         raster (np.ndarray): The raw radiance values.
