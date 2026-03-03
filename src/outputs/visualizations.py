@@ -300,6 +300,227 @@ def generate_trend_map(years, output_dir, district_gdf, maps_output_dir=None):
     log.info("Saved Trend Map: %s", path)
 
 
+def generate_light_increase_frames(years, output_dir, district_gdf,
+                                   maps_output_dir=None):
+    """Generate per-year state-level radiance heatmap frames.
+
+    Shows absolute nighttime radiance intensity across the entire state for
+    each year, with year-over-year change annotation.  Designed as GIF frames
+    for the "Light Increase" animation.
+
+    Parameters
+    ----------
+    years : list[int]
+        Years to generate frames for.
+    output_dir : str
+        Run-level directory containing subsets/.
+    district_gdf : gpd.GeoDataFrame
+        District boundaries.
+    maps_output_dir : str, optional
+        Directory for map outputs. Defaults to output_dir/maps/.
+    """
+    if maps_output_dir is None:
+        maps_output_dir = os.path.join(output_dir, "maps")
+    frame_dir = os.path.join(maps_output_dir, "frames", "light_increase")
+    os.makedirs(frame_dir, exist_ok=True)
+    log.info("Generating Light Increase frames in %s...", frame_dir)
+
+    baseline_year = min(years)
+    baseline_data, _ = _load_raster(output_dir, baseline_year)
+    prev_mean = None
+
+    for year in years:
+        data, extent = _load_raster(output_dir, year)
+        if data is None:
+            continue
+
+        fig, ax = _setup_plot(district_gdf)
+        fig.patch.set_facecolor('black')
+
+        # Log-scale for visibility (same as per-district maps)
+        display_data = np.log10(np.clip(data, 0.01, None))
+        display_data = np.where(np.isfinite(display_data), display_data, np.nan)
+
+        im = ax.imshow(display_data, extent=extent, cmap="magma",
+                       vmin=-2, vmax=2, origin="upper", aspect="auto")
+
+        cbar = plt.colorbar(im, ax=ax, shrink=0.6)
+        cbar.ax.yaxis.set_tick_params(color='white')
+        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+        cbar.set_label("log\u2081\u2080(Radiance nW/cm\u00b2/sr)", color='white')
+
+        # Compute statistics
+        current_mean = float(np.nanmean(data))
+        yoy_change = ""
+        if prev_mean is not None:
+            delta = current_mean - prev_mean
+            yoy_change = f"\nYoY Change: {delta:+.3f} nW"
+
+        total_change = ""
+        if baseline_data is not None and year != baseline_year:
+            diff = current_mean - float(np.nanmean(baseline_data))
+            total_change = f"\nvs {baseline_year}: {diff:+.3f} nW"
+
+        text = (
+            f"Year: {year}\n"
+            f"Mean Radiance: {current_mean:.3f} nW"
+            f"{yoy_change}{total_change}"
+        )
+        _add_annotation(ax, text)
+
+        ax.set_title(f"Maharashtra: Light Pollution ({year})",
+                     fontsize=16, color='white')
+
+        path = os.path.join(frame_dir, f"light_increase_{year}.png")
+        fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight",
+                    facecolor='black')
+        plt.close(fig)
+        log.info("Generated: %s", path)
+        prev_mean = current_mean
+
+
+def generate_per_district_radiance_frames(years, output_dir, district_gdf,
+                                          maps_output_dir=None):
+    """Generate per-district zoomed radiance frames for every year.
+
+    For each district × year combination, clips the median raster to the
+    district boundary and renders a zoomed-in map.  Output is organised as
+    ``frames/districts/<district_name>/radiance_<year>.png`` so each district
+    directory can be independently assembled into a GIF.
+
+    Parameters
+    ----------
+    years : list[int]
+        Years to generate frames for.
+    output_dir : str
+        Run-level directory containing subsets/.
+    district_gdf : gpd.GeoDataFrame
+        District boundaries with 'district' column.
+    maps_output_dir : str, optional
+        Where to write maps. Defaults to output_dir/maps/.
+
+    Returns
+    -------
+    int
+        Total number of frames generated.
+    """
+    if maps_output_dir is None:
+        maps_output_dir = os.path.join(output_dir, "maps")
+
+    frames_base = os.path.join(maps_output_dir, "frames", "districts")
+    os.makedirs(frames_base, exist_ok=True)
+    log.info("Generating per-district radiance frames in %s...", frames_base)
+
+    total_count = 0
+    for _, row in district_gdf.iterrows():
+        district_name = row["district"]
+        safe_name = district_name.lower().replace(" ", "_")
+        district_frame_dir = os.path.join(frames_base, safe_name)
+        os.makedirs(district_frame_dir, exist_ok=True)
+
+        prev_mean = None
+
+        for year in years:
+            subset_dir = os.path.join(output_dir, "subsets", str(year))
+            median_path = os.path.join(subset_dir,
+                                       f"maharashtra_median_{year}.tif")
+            if not os.path.exists(median_path):
+                continue
+
+            try:
+                with rasterio.open(median_path) as src:
+                    geom = [mapping(row.geometry)]
+                    clipped, clipped_transform = rasterio.mask.mask(
+                        src, geom, crop=True, filled=True, nodata=np.nan
+                    )
+                    clipped_data = clipped[0]
+                    clipped_bounds = rasterio.transform.array_bounds(
+                        clipped_data.shape[0], clipped_data.shape[1],
+                        clipped_transform
+                    )
+
+                clipped_data = viirs_utils.apply_dynamic_background_subtraction(
+                    clipped_data, year=year
+                )
+
+                clipped_extent = [
+                    clipped_bounds[0], clipped_bounds[2],
+                    clipped_bounds[1], clipped_bounds[3],
+                ]
+
+                fig, ax = plt.subplots(figsize=(10, 9))
+                fig.patch.set_facecolor('black')
+
+                display_data = np.log10(np.clip(clipped_data, 0.01, None))
+                display_data = np.where(np.isfinite(display_data),
+                                        display_data, np.nan)
+
+                im = ax.imshow(
+                    display_data, extent=clipped_extent, cmap="magma",
+                    vmin=-2, vmax=2, origin="upper", aspect="auto"
+                )
+
+                single_gdf = district_gdf[
+                    district_gdf["district"] == district_name
+                ]
+                single_gdf.boundary.plot(
+                    ax=ax, edgecolor="white", linewidth=1.0, alpha=0.8
+                )
+
+                cbar = plt.colorbar(im, ax=ax, shrink=0.6)
+                cbar.ax.yaxis.set_tick_params(color='white')
+                plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+                cbar.set_label("log\u2081\u2080(Radiance nW/cm\u00b2/sr)",
+                               color='white')
+
+                # Stats annotation
+                current_mean = float(np.nanmean(clipped_data))
+                yoy_text = ""
+                if prev_mean is not None:
+                    delta = current_mean - prev_mean
+                    yoy_text = f"\nYoY: {delta:+.3f} nW"
+
+                text = (
+                    f"Year: {year}\n"
+                    f"Mean: {current_mean:.3f} nW"
+                    f"{yoy_text}"
+                )
+                ax.text(0.98, 0.02, text, transform=ax.transAxes,
+                        fontsize=12, fontweight="bold", color="white",
+                        ha="right", va="bottom",
+                        bbox=dict(boxstyle="round,pad=0.5", fc="black",
+                                  alpha=0.7, ec="white"))
+
+                ax.set_title(
+                    f"{district_name}: Nighttime Radiance ({year})",
+                    fontsize=14, color='white'
+                )
+                ax.set_axis_off()
+                plt.tight_layout()
+
+                path = os.path.join(district_frame_dir,
+                                    f"radiance_{year}.png")
+                fig.savefig(path, dpi=config.MAP_DPI, bbox_inches="tight",
+                            facecolor='black')
+                plt.close(fig)
+                total_count += 1
+                prev_mean = current_mean
+
+            except Exception as exc:
+                log.warning(
+                    "Failed to generate radiance frame for %s/%d: %s",
+                    district_name, year, exc
+                )
+                plt.close("all")
+                continue
+
+        log.info("Generated frames for %s", district_name)
+
+    log.info("Generated %d total per-district radiance frames in %s",
+             total_count, frames_base)
+    return total_count
+
+
 def generate_per_district_radiance_maps(output_dir, year, district_gdf,
                                         maps_output_dir=None):
     """Generate zoomed-in radiance raster maps clipped to each district.

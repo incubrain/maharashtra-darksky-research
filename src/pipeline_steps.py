@@ -535,3 +535,61 @@ def step_per_district_radiance_maps(
         input_summary={"year": latest_year, "districts": len(gdf)},
         output_summary_fn=lambda count: {"maps_generated": count},
     )
+
+
+def step_light_increase_frames(
+    years: list[int],
+    output_dir: str,
+    gdf: gpd.GeoDataFrame,
+    maps_dir: str = None,
+) -> tuple:
+    """Generate state-level light increase + per-district radiance frames."""
+    from src.outputs.visualizations import (
+        generate_light_increase_frames,
+        generate_per_district_radiance_frames,
+    )
+
+    def _work():
+        counts = {}
+        generate_light_increase_frames(
+            years, output_dir, gdf, maps_output_dir=maps_dir,
+        )
+        counts["light_increase"] = len(years)
+        district_count = generate_per_district_radiance_frames(
+            years, output_dir, gdf, maps_output_dir=maps_dir,
+        )
+        counts["district_frames"] = district_count
+        return counts
+
+    return run_step(
+        "light_increase_frames", _work,
+        input_summary={"years": len(years), "districts": len(gdf)},
+        output_summary_fn=lambda counts: counts,
+    )
+
+
+def step_assemble_gifs(
+    maps_dir: str,
+    *,
+    duration_ms: int = 500,
+    max_width: int = 800,
+    quality: int = 80,
+    last_frame_pause_ms: int = 2000,
+) -> tuple:
+    """Assemble all frame directories into animated GIFs."""
+    from src.outputs.gif_assembler import assemble_all_gifs
+
+    def _work():
+        return assemble_all_gifs(
+            maps_dir,
+            duration_ms=duration_ms,
+            max_width=max_width,
+            quality=quality,
+            last_frame_pause_ms=last_frame_pause_ms,
+        )
+
+    return run_step(
+        "assemble_gifs", _work,
+        input_summary={"maps_dir": maps_dir},
+        output_summary_fn=lambda paths: {"gifs_generated": len(paths)},
+    )
