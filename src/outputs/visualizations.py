@@ -19,7 +19,6 @@ import geopandas as gpd
 from shapely.geometry import mapping
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path as MplPath
-from scipy import stats
 from src import config
 
 log = logging.getLogger(__name__)
@@ -59,6 +58,47 @@ def _make_clip_patch(gdf_subset, ax):
     )
     ax.add_patch(patch)
     return patch
+
+
+def _add_colorbar(im, ax, label, shrink=0.6):
+    """Add a colorbar with white text styling for dark backgrounds."""
+    cbar = plt.colorbar(im, ax=ax, shrink=shrink)
+    cbar.ax.yaxis.set_tick_params(color='white')
+    plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
+    cbar.set_label(label, color='white')
+    return cbar
+
+
+def _prepare_log_display(data, vmin_raw=0.01):
+    """Convert radiance data to log10 scale for visualization.
+
+    NaN pixels remain NaN; values below *vmin_raw* are clipped before log.
+    """
+    display = np.log10(np.clip(data, vmin_raw, None))
+    return np.where(np.isfinite(display), display, np.nan)
+
+
+def _load_and_clip_raster(median_path, geometry):
+    """Clip a median raster to a single district geometry.
+
+    Returns
+    -------
+    tuple[np.ndarray, list]
+        ``(clipped_data, extent)`` where *extent* is
+        ``[left, right, bottom, top]``.
+    """
+    with rasterio.open(median_path) as src:
+        geom = [mapping(geometry)]
+        clipped, clipped_transform = rasterio.mask.mask(
+            src, geom, crop=True, filled=True, nodata=np.nan
+        )
+        clipped_data = clipped[0]
+        clipped_bounds = rasterio.transform.array_bounds(
+            clipped_data.shape[0], clipped_data.shape[1], clipped_transform
+        )
+    extent = [clipped_bounds[0], clipped_bounds[2],
+              clipped_bounds[1], clipped_bounds[3]]
+    return clipped_data, extent
 
 
 def _load_raster(output_dir, year):
@@ -197,10 +237,7 @@ def generate_differential_frames(years, output_dir, district_gdf,
         )
         _add_annotation(ax, text)
 
-        cbar = plt.colorbar(im, ax=ax, shrink=0.6, label="Difference (nW/cm²/sr)")
-        cbar.ax.yaxis.set_tick_params(color='white')
-        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-        cbar.set_label("Change vs 2012 (nW/cm²/sr)", color='white')
+        _add_colorbar(im, ax, "Change vs 2012 (nW/cm\u00b2/sr)")
 
         ax.set_title(f"New Light: {year} vs {baseline_year}", fontsize=16, color='white')
 
@@ -238,10 +275,12 @@ def generate_darkness_frames(years, output_dir, district_gdf,
         data, extent = _load_raster(output_dir, year)
         if data is None: continue
 
-        # Dark mask
-        dark_mask = (data < threshold_nw) & (data > 0)
+        # Dark mask — zero-valued pixels are genuinely dark in VNL V2.2
+        # (background-zeroed during composite production); only NaN is nodata.
+        valid_mask = np.isfinite(data)
+        dark_mask = valid_mask & (data < threshold_nw)
 
-        total_pixels = np.sum(np.isfinite(data))
+        total_pixels = np.sum(valid_mask)
         dark_pixels = np.sum(dark_mask)
         dark_pct = (dark_pixels / total_pixels * 100) if total_pixels > 0 else 0
 
@@ -328,10 +367,7 @@ def generate_trend_map(years, output_dir, district_gdf, maps_output_dir=None):
     im = ax.imshow(slope_map, extent=extent, cmap="coolwarm", vmin=-2, vmax=2,
                    origin="upper", aspect="auto")
 
-    cbar = plt.colorbar(im, ax=ax, shrink=0.6, label="Rate of Change (nW/year)")
-    cbar.ax.yaxis.set_tick_params(color='white')
-    plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-    cbar.set_label("Trend Slope (nW/year)", color='white')
+    _add_colorbar(im, ax, "Trend Slope (nW/year)")
 
     ax.set_title(f"Light Pollution Growth Trend ({years[0]}-{years[-1]})", fontsize=16, color='white')
 
@@ -379,18 +415,13 @@ def generate_light_increase_frames(years, output_dir, district_gdf,
         fig, ax = _setup_plot(district_gdf)
         fig.patch.set_facecolor('black')
 
-        # Log-scale for visibility (same as per-district maps)
-        display_data = np.log10(np.clip(data, 0.01, None))
-        display_data = np.where(np.isfinite(display_data), display_data, np.nan)
+        display_data = _prepare_log_display(data)
 
         im = ax.imshow(display_data, extent=extent, cmap="magma",
                        vmin=-2, vmax=2, origin="upper", aspect="auto",
                        interpolation="nearest")
 
-        cbar = plt.colorbar(im, ax=ax, shrink=0.6)
-        cbar.ax.yaxis.set_tick_params(color='white')
-        plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-        cbar.set_label("log\u2081\u2080(Radiance nW/cm\u00b2/sr)", color='white')
+        _add_colorbar(im, ax, "log\u2081\u2080(Radiance nW/cm\u00b2/sr)")
 
         # Compute statistics
         current_mean = float(np.nanmean(data))
@@ -470,29 +501,14 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
                 continue
 
             try:
-                with rasterio.open(median_path) as src:
-                    geom = [mapping(row.geometry)]
-                    clipped, clipped_transform = rasterio.mask.mask(
-                        src, geom, crop=True, filled=True, nodata=np.nan
-                    )
-                    clipped_data = clipped[0]
-                    clipped_bounds = rasterio.transform.array_bounds(
-                        clipped_data.shape[0], clipped_data.shape[1],
-                        clipped_transform
-                    )
-
-                clipped_extent = [
-                    clipped_bounds[0], clipped_bounds[2],
-                    clipped_bounds[1], clipped_bounds[3],
-                ]
+                clipped_data, clipped_extent = _load_and_clip_raster(
+                    median_path, row.geometry
+                )
 
                 fig, ax = plt.subplots(figsize=(10, 9))
                 fig.patch.set_facecolor('black')
 
-                # Fill NaN (outside boundary) with 0 before log-scale
-                data_filled = np.where(np.isnan(clipped_data),
-                                       0.0, clipped_data)
-                display_data = np.log10(np.clip(data_filled, 0.01, None))
+                display_data = _prepare_log_display(clipped_data)
 
                 im = ax.imshow(
                     display_data, extent=clipped_extent, cmap="magma",
@@ -511,11 +527,7 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
                     ax=ax, edgecolor="white", linewidth=1.0, alpha=0.8
                 )
 
-                cbar = plt.colorbar(im, ax=ax, shrink=0.6)
-                cbar.ax.yaxis.set_tick_params(color='white')
-                plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-                cbar.set_label("log\u2081\u2080(Radiance nW/cm\u00b2/sr)",
-                               color='white')
+                _add_colorbar(im, ax, "log\u2081\u2080(Radiance nW/cm\u00b2/sr)")
 
                 # Stats annotation
                 current_mean = float(np.nanmean(clipped_data))
@@ -536,11 +548,7 @@ def generate_per_district_radiance_frames(years, output_dir, district_gdf,
                     f"Mean: {current_mean:.3f} nW"
                     f"{baseline_text}"
                 )
-                ax.text(0.98, 0.02, text, transform=ax.transAxes,
-                        fontsize=12, fontweight="bold", color="white",
-                        ha="right", va="bottom",
-                        bbox=dict(boxstyle="round,pad=0.5", fc="black",
-                                  alpha=0.7, ec="white"))
+                _add_annotation(ax, text)
 
                 ax.set_title(
                     f"{district_name}: Nighttime Radiance ({year})",
@@ -611,28 +619,14 @@ def generate_per_district_radiance_maps(output_dir, year, district_gdf,
     for _, row in district_gdf.iterrows():
         district_name = row["district"]
         try:
-            # Clip raster to district boundary
-            with rasterio.open(median_path) as src:
-                geom = [mapping(row.geometry)]
-                clipped, clipped_transform = rasterio.mask.mask(
-                    src, geom, crop=True, filled=True, nodata=np.nan
-                )
-                clipped_data = clipped[0]
-                clipped_bounds = rasterio.transform.array_bounds(
-                    clipped_data.shape[0], clipped_data.shape[1], clipped_transform
-                )
-
-            clipped_extent = [
-                clipped_bounds[0], clipped_bounds[2],
-                clipped_bounds[1], clipped_bounds[3],
-            ]
+            clipped_data, clipped_extent = _load_and_clip_raster(
+                median_path, row.geometry
+            )
 
             fig, ax = plt.subplots(figsize=(10, 9))
             fig.patch.set_facecolor('black')
 
-            # Log-scale for visibility
-            display_data = np.log10(np.clip(clipped_data, 0.01, None))
-            display_data = np.where(np.isfinite(display_data), display_data, np.nan)
+            display_data = _prepare_log_display(clipped_data)
 
             im = ax.imshow(
                 display_data, extent=clipped_extent, cmap="magma",
@@ -647,10 +641,7 @@ def generate_per_district_radiance_maps(output_dir, year, district_gdf,
                 ax=ax, edgecolor="white", linewidth=1.0, alpha=0.8
             )
 
-            cbar = plt.colorbar(im, ax=ax, shrink=0.6)
-            cbar.ax.yaxis.set_tick_params(color='white')
-            plt.setp(plt.getp(cbar.ax.axes, 'yticklabels'), color='white')
-            cbar.set_label("log\u2081\u2080(Radiance nW/cm\u00b2/sr)", color='white')
+            _add_colorbar(im, ax, "log\u2081\u2080(Radiance nW/cm\u00b2/sr)")
 
             ax.set_title(
                 f"{district_name}: Nighttime Radiance ({year})",
