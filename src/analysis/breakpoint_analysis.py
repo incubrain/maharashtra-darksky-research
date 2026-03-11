@@ -33,11 +33,12 @@ KNOWN FINDING — Universal 2016 Breakpoint:
        especially confounded — apparent brightening may reflect improved
        electricity supply rather than new light installations.
 
-    Visualization background correction now uses dark-reference-area
-    subtraction (Coesfeld et al. 2020) instead of per-year P01 DBS,
-    which reduces the radiometric artefact component.  However, the
-    breakpoint analysis operates on zonal-statistics radiance (no DBS),
-    so the confound persists in this module's output.
+    Visualization frames use raw VNL V2.2 radiance without additional
+    background subtraction (the annual composite product already handles
+    background zeroing).  The breakpoint analysis operates on
+    zonal-statistics radiance (also no subtraction), so the radiometric
+    confound from composite processing changes persists in this module's
+    output.
 
     IMPLICATION: A single-breakpoint model is too coarse for this data.
     Future work should consider:
