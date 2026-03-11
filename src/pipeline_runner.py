@@ -370,7 +370,13 @@ def run_district_pipeline(args, single_step=None):
         log.warning("Light increase frames failed: %s", result.error)
 
     # Step 19: Assemble GIFs from all frame directories
-    result, _ = step_assemble_gifs(maps_dir)
+    result, _ = step_assemble_gifs(
+        maps_dir,
+        duration_ms=args.gif_duration_ms,
+        max_width=args.gif_max_width,
+        quality=args.gif_quality,
+        last_frame_pause_ms=args.gif_last_pause_ms,
+    )
     pipeline_result.step_results.append(result)
     if not result.ok:
         log.warning("GIF assembly failed: %s", result.error)
@@ -531,7 +537,13 @@ def _run_single_district_step(step_name, args, years, dirs, pipeline_result):
         ),
         "assemble_gifs": (
             lambda: True,  # no data dependency
-            lambda _: step_assemble_gifs(maps_dir),
+            lambda _: step_assemble_gifs(
+                maps_dir,
+                duration_ms=args.gif_duration_ms,
+                max_width=args.gif_max_width,
+                quality=args.gif_quality,
+                last_frame_pause_ms=args.gif_last_pause_ms,
+            ),
         ),
     }
 
@@ -812,6 +824,37 @@ Examples:
         default="config",
         dest="city_source",
         help="City locations source: 'config' (hand-picked) or 'census' (geocoded census towns)",
+    )
+
+    # GIF assembly settings
+    gif_group = parser.add_argument_group("GIF assembly settings")
+    gif_group.add_argument(
+        "--gif-duration",
+        type=int,
+        default=500,
+        dest="gif_duration_ms",
+        help="Milliseconds per frame in animated GIFs (default: 500)",
+    )
+    gif_group.add_argument(
+        "--gif-max-width",
+        type=int,
+        default=800,
+        dest="gif_max_width",
+        help="Max width in pixels for GIF frames; 0 = original (default: 800)",
+    )
+    gif_group.add_argument(
+        "--gif-quality",
+        type=int,
+        default=80,
+        dest="gif_quality",
+        help="Colour quantisation quality 1-100 (default: 80)",
+    )
+    gif_group.add_argument(
+        "--gif-last-pause",
+        type=int,
+        default=2000,
+        dest="gif_last_pause_ms",
+        help="Extra pause on last frame in ms (default: 2000)",
     )
     return parser.parse_args()
 
