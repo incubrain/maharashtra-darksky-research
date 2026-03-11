@@ -96,8 +96,8 @@ class TestVIIRSVersionMapping:
                 f"Unexpected VIIRS version '{version}' for year {year}"
             )
 
-    def test_v21_only_for_early_years(self):
-        """v21 should only be used for 2012-2013."""
+    def test_v21_only_for_pre2022(self):
+        """v21 should only be used for 2012-2021 (NPP single-satellite era)."""
         for year, version in config.VIIRS_VERSION_MAPPING.items():
             if version == "v21":
-                assert year <= 2013, f"v21 used for year {year}, expected only 2012-2013"
+                assert year <= 2021, f"v21 used for year {year}, expected only 2012-2021"

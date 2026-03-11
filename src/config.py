@@ -193,11 +193,13 @@ LAYER_PATTERNS = {
     "average_masked": "average_masked",
 }
 
-# VIIRS version by year (NOAA changed product versions)
+# VIIRS version by year (based on actual NOAA EOG filenames)
+# v21: 2012-2021 (NPP only). 2012-2013 use vcmcfg, 2014+ use vcmslcfg.
+# v22: 2022-2024 (NPP + JPSS-1 dual-satellite composites).
 VIIRS_VERSION_MAPPING = {
-    2012: "v21", 2013: "v21",
-    2014: "v22", 2015: "v22", 2016: "v22", 2017: "v22",
-    2018: "v22", 2019: "v22", 2020: "v22", 2021: "v22",
+    2012: "v21", 2013: "v21", 2014: "v21", 2015: "v21",
+    2016: "v21", 2017: "v21", 2018: "v21", 2019: "v21",
+    2020: "v21", 2021: "v21",
     2022: "v22", 2023: "v22", 2024: "v22",
 }
 

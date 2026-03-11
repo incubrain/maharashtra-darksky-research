@@ -292,7 +292,7 @@ All parameters are in `src/config.py` with inline scientific citations:
 | ALAN thresholds | `ALAN_LOW_THRESHOLD=1.0` nW, `ALAN_MEDIUM_THRESHOLD=5.0` nW, percentile bins |
 | Locations | `URBAN_CITIES` (43 cities), `DARKSKY_SITES` (11 pilot sites) |
 | Visualization | `MAP_DPI=300`, highlight districts, output directory structure |
-| VIIRS metadata | `VIIRS_VERSION_MAPPING` (v21 for 2012-2013, v22 for 2014+), `VIIRS_RESOLUTION_DEG=0.00417` |
+| VIIRS metadata | `VIIRS_VERSION_MAPPING` (v21 for 2012-2021, v22 for 2022+), `VIIRS_RESOLUTION_DEG=0.00417` |
 
 ## Testing
 
