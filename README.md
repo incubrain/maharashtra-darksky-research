@@ -112,8 +112,38 @@ outputs/
 
 - **VIIRS DNB Annual Composites**: [NOAA Earth Observation Group](https://eogdata.mines.edu/products/vnl/)
   - Layers: `median_masked`, `average_masked`, `cf_cvg`, `lit_mask`
-  - Years: 2012-2024 (v21 for 2012-2013, v22 for 2014-2024)
+  - Years: 2012-2024 (v2.1 for 2012-2021, v2.2 for 2022-2024)
 - **Maharashtra District Boundaries**: [datta07/INDIAN-SHAPEFILES](https://github.com/datta07/INDIAN-SHAPEFILES) GeoJSON (36 districts)
+
+### VIIRS Dataset Specifications
+
+All data is from the **VIIRS Nighttime Lights (VNL) Annual Composite** product produced by the NOAA Earth Observation Group. The product composites nightly cloud-free DNB observations into annual grids at ~15 arc-second (~500m) resolution.
+
+**Product versions used:**
+
+| Years | Product | Satellite(s) | Sensor Config | Key Characteristics |
+|-------|---------|--------------|---------------|---------------------|
+| 2012 | VNL V2.1 | NPP | vcmcfg | Partial year (Apr 2012 - Mar 2013, "Set B"). No stray-light correction. |
+| 2013 | VNL V2.1 | NPP | vcmcfg | Full calendar year. No stray-light correction. |
+| 2014-2021 | VNL V2.1 | NPP | vcmslcfg | Full calendar years. With stray-light correction. |
+| 2022 | VNL V2.2 | NPP + JPSS-1 | vcmslcfg | Dual-satellite composite. Higher observation counts. |
+| 2023-2024 | VNL V2.2 | NPP + JPSS-1 | vcmslcfg | Dual-satellite composite. |
+
+**Important notes:**
+
+- **2012 (Set B):** VIIRS launched in April 2012. "Set B" (`201204-201303`) extends to March 2013 for better cloud-free coverage. "Set A" (`201204-201212`) covers only 9 months and has fewer observations.
+- **vcmcfg vs vcmslcfg:** Starting 2014, NOAA applied stray-light correction to high-latitude observations. At Maharashtra's latitude (~16-22°N) the impact is minimal, but `vcmslcfg` is the recommended product.
+- **Background zeroing:** NOAA uses a data-range (DR) threshold indexed to cloud coverage to zero out background areas during annual compositing. This produces a structural discontinuity around 2016-2017: before 2017, dim pixels (0 < radiance < 0.25 nW) exist in the composite; after 2017, nearly all sub-threshold areas are zeroed to exactly 0.
+- **V2.1 → V2.2 transition (2022):** V2.2 merges observations from two satellites, producing higher cloud-free coverage and ~6% lower dark-pixel fraction / ~20% higher mean radiance compared to V2.1 for the same region.
+
+**Required layers per year:**
+
+| Layer | Filename pattern | Description |
+|-------|-----------------|-------------|
+| `median_masked` | `*.median_masked.dat.tif.gz` | Median radiance of lit pixels (primary analysis layer) |
+| `average_masked` | `*.average_masked.dat.tif.gz` | Mean radiance of lit pixels |
+| `cf_cvg` | `*.cf_cvg.dat.tif.gz` | Cloud-free observation count per pixel |
+| `lit_mask` | `*.lit_mask.dat.tif.gz` | Binary mask of persistently lit pixels |
 
 ## Methods
 

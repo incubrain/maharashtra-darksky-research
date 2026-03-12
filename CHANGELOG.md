@@ -3,61 +3,46 @@
 Scientific corrections and methodological improvements to the Maharashtra
 VIIRS ALAN analysis pipeline.
 
+## [Unreleased] - 2026-03-11
+
+### Remove Dark-Reference Background Correction
+
+Removed the dark-reference-area background correction (Coesfeld method)
+from all visualization frame generators.  No additional background
+subtraction is applied — the VNL V2.2 annual composite product already
+handles background zeroing during composite production.
+
+**Why removed:** Investigation revealed the correction was actively
+harmful:
+
+1. **Sites not dark:** All three reference sites (Pench, Tadoba, Yawal)
+   showed +138–207% radiance increase over 2012–2024, tracking light
+   pollution growth rather than providing a stable natural background.
+2. **Sampling bias:** The `pixels > 0` filter excluded zero-radiance
+   pixels (the truly dark areas), computing medians from only 4–77 lit
+   pixels per site — a tiny, non-representative sample.
+3. **Over-correction:** Background estimates subtracted 27–44% of the
+   raw signal (0.18–0.56 nW), far exceeding any plausible airglow
+   contribution (~0.05–0.1 nW).
+4. **Instability:** Background values had 36.6% CV with a 3.1x range,
+   introducing artificial year-over-year fluctuations (e.g., the
+   2016→2017 background doubled from 0.178 to 0.370 nW).
+5. **Double-counting:** VNL V2.2 already applies data-range-based
+   background zeroing, so additional correction was redundant.
+
+**Deleted code:**
+- `compute_dark_reference_backgrounds()` and `save_dark_reference_audit()`
+  from `src/outputs/visualizations.py`
+- `DARK_REFERENCE_SITES` and `DARK_REF_BUFFER_KM` constants
+- `backgrounds` parameter from all frame/map generator functions
+- Background computation from pipeline steps (animation_frames,
+  per_district_radiance_maps, light_increase_frames)
+
+The per-year P01 DBS function (`viirs_utils.apply_dynamic_background_subtraction`)
+is retained for single-year diagnostic plots where cross-year consistency
+is not required.
+
 ## [Unreleased] - 2026-03-03
-
-### Dark-Reference Background Correction (Coesfeld Method)
-
-Replaced per-year P01 Dynamic Background Subtraction (DBS) with a
-**dark-reference-area background correction** for all visualization
-frame generators, following Coesfeld et al. (2020).
-
-**Problem:** The original DBS computed the 1st-percentile (P01) of
-valid pixels from each year's state raster and subtracted it as a
-"noise floor."  However, the P01 rises from 0.10 nW (2012) to
-0.49 nW (2024) — not because of increasing noise, but because later
-NOAA EOG annual composites retain more dim pixels due to evolving
-background masking.  This systematically over-subtracts from later
-years, compressing observed growth trends and causing artificial
-year-to-year dips (e.g., 2012→2013 appeared as a 12–30% radiance
-drop in some districts when it was actually stable).
-
-**Solution:** Three protected-area dark-sky sites are sampled per year
-to estimate the natural background:
-
-| Site                    | Type               | Mean Radiance | Temporal CV |
-|-------------------------|--------------------|---------------|-------------|
-| Pench Tiger Reserve     | Tiger reserve      | 0.029 nW      | 0.13        |
-| Tadoba Tiger Reserve    | Tiger reserve      | 0.002 nW      | 0.42        |
-| Yawal Wildlife Sanctuary| Wildlife sanctuary | 0.082 nW      | 0.33        |
-
-For each year, the median radiance inside each site's 10 km buffer is
-computed from the raw state raster, and the median of the three site
-medians is subtracted as the background.  This is physically meaningful
-(genuinely unlit protected areas) rather than a statistical artefact of
-the raster's own pixel distribution.
-
-Per-site per-year values are logged to
-`diagnostics/dark_reference_backgrounds.csv` for auditability.
-
-**Selection criteria:** Sites were ranked by composite score of
-darkness (lowest mean radiance), temporal stability (lowest coefficient
-of variation across 2012–2024), adequate pixel count (≥50 valid pixels
-in buffer), non-coastal (no ocean pixel contamination), and protected
-status.  Melghat Tiger Reserve was rejected despite low radiance due to
-high temporal instability (CV = 0.82, radiance tripled 2016–2022).
-
-**Citation:**
-Coesfeld, J., Kuester, T., Kuechly, H.U. & Kyba, C.C.M. (2020).
-Reducing Variability and Removing Natural Light from Nighttime Satellite
-Imagery. *Sensors*, 20(11), 3287.
-https://doi.org/10.3390/s20113287
-
-**Impact:** All visualization frame types (sprawl, differential,
-darkness, light increase, trend map, per-district radiance) now use
-year-specific dark-reference backgrounds.  The per-year P01 DBS
-function (`viirs_utils.apply_dynamic_background_subtraction`) is
-retained only for single-year diagnostic plots where cross-year
-consistency is not required.
 
 ### Per-Year Light Increase Frames and GIF Assembly
 
@@ -462,8 +447,9 @@ of the VIIRS VNL annual composite product:
 3. NPP to NOAA-20 satellite transition (2018+).
 
 This does NOT affect the main zonal statistics path (which uses raw
-radiance).  For visualizations, it is now handled by the dark-reference
-background correction described above.
+radiance).  Visualization frames also use raw VNL V2.2 radiance without
+additional background subtraction — the annual composite product already
+handles background zeroing during production.
 
 #### Universal 2016 Breakpoint
 34 of 36 districts show a structural breakpoint at 2016 in piecewise

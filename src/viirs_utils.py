@@ -15,15 +15,11 @@ def apply_dynamic_background_subtraction(raster, year=None, percentile=1.0):
     Subtracting a larger floor from later years systematically compresses
     the observed growth trend.
 
-    For time-series visualizations, ``compute_dark_reference_backgrounds()``
-    in ``src/outputs/visualizations.py`` should be used instead — it samples
-    three protected-area dark-sky sites per year (Pench, Tadoba, Yawal) and
-    subtracts a physically-meaningful natural background estimate following
-    Coesfeld et al. (2020).
-
     This function is retained for single-year diagnostic plots (gradient
     analysis, quality diagnostics, ecological overlay) where cross-year
-    consistency is not required.
+    consistency is not required.  Time-series visualization frames use
+    raw VNL V2.2 radiance without additional background subtraction,
+    since the annual composite product already handles background zeroing.
 
     Args:
         raster (np.ndarray): The raw radiance values.
