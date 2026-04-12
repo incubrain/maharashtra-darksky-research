@@ -1,0 +1,16 @@
+{
+  "is_fixture": true,
+  "note": "Hand-crafted dev fixture with 3 districts. Replace via scripts/sync_web_export.sh once the real pipeline has been run with --export-web.",
+  "state": "Maharashtra",
+  "data_source": "NOAA EOG VIIRS DNB annual composites (v21/v22)",
+  "year_range": [
+    2012,
+    2024
+  ],
+  "total_districts": 36,
+  "pipeline_version": "fixture",
+  "generated_at": "2026-04-12T00:00:00Z",
+  "methodology_summary": "Annual VIIRS DNB radiance is aggregated over each district's boundary. Per-district log-linear trends fit over 2012\u20132024 yield annual % change with bootstrap 95% CIs. ALAN classification uses nW/cm\u00b2/sr cutoffs (low<1, medium 1\u20135, high>5). Percentile tiers are derived from latest-year radiance distribution across all districts.",
+  "citation": "Maharashtra Dark-Sky Research, AstronEra (2026). Based on NOAA EOG VIIRS DNB.",
+  "research_repo_url": "https://github.com/<org>/maharashtra-darksky-research"
+}

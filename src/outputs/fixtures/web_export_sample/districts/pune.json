@@ -1,0 +1,158 @@
+{
+  "district": "Pune",
+  "slug": "pune",
+  "annual_series": [
+    {
+      "year": 2012,
+      "mean_radiance": 4.193,
+      "median_radiance": 3.6871,
+      "min_radiance": 1.1651,
+      "max_radiance": 21.01,
+      "std_radiance": 2.4067,
+      "pixel_count": 1585
+    },
+    {
+      "year": 2013,
+      "mean_radiance": 4.6255,
+      "median_radiance": 4.2731,
+      "min_radiance": 0.328,
+      "max_radiance": 29.2772,
+      "std_radiance": 2.5951,
+      "pixel_count": 8465
+    },
+    {
+      "year": 2014,
+      "mean_radiance": 5.121,
+      "median_radiance": 4.9611,
+      "min_radiance": 1.0232,
+      "max_radiance": 37.8015,
+      "std_radiance": 2.809,
+      "pixel_count": 6441
+    },
+    {
+      "year": 2015,
+      "mean_radiance": 5.419,
+      "median_radiance": 5.0414,
+      "min_radiance": 1.2181,
+      "max_radiance": 23.2614,
+      "std_radiance": 2.5863,
+      "pixel_count": 10828
+    },
+    {
+      "year": 2016,
+      "mean_radiance": 6.233,
+      "median_radiance": 5.8979,
+      "min_radiance": 1.6971,
+      "max_radiance": 33.504,
+      "std_radiance": 5.253,
+      "pixel_count": 7885
+    },
+    {
+      "year": 2017,
+      "mean_radiance": 6.6293,
+      "median_radiance": 6.1413,
+      "min_radiance": 0.6874,
+      "max_radiance": 51.826,
+      "std_radiance": 2.9661,
+      "pixel_count": 8631
+    },
+    {
+      "year": 2018,
+      "mean_radiance": 7.3723,
+      "median_radiance": 6.5733,
+      "min_radiance": 1.3639,
+      "max_radiance": 45.8374,
+      "std_radiance": 4.5052,
+      "pixel_count": 7196
+    },
+    {
+      "year": 2019,
+      "mean_radiance": 8.1621,
+      "median_radiance": 7.2374,
+      "min_radiance": 1.4033,
+      "max_radiance": 51.8538,
+      "std_radiance": 6.0691,
+      "pixel_count": 11020
+    },
+    {
+      "year": 2020,
+      "mean_radiance": 9.4417,
+      "median_radiance": 9.2104,
+      "min_radiance": 1.2307,
+      "max_radiance": 51.1058,
+      "std_radiance": 7.6814,
+      "pixel_count": 1984
+    },
+    {
+      "year": 2021,
+      "mean_radiance": 9.993,
+      "median_radiance": 8.7072,
+      "min_radiance": 1.2565,
+      "max_radiance": 34.6501,
+      "std_radiance": 8.7362,
+      "pixel_count": 6926
+    },
+    {
+      "year": 2022,
+      "mean_radiance": 11.6066,
+      "median_radiance": 10.7311,
+      "min_radiance": 0.6948,
+      "max_radiance": 47.8873,
+      "std_radiance": 9.4353,
+      "pixel_count": 10097
+    },
+    {
+      "year": 2023,
+      "mean_radiance": 12.7805,
+      "median_radiance": 10.9785,
+      "min_radiance": 1.4326,
+      "max_radiance": 53.7844,
+      "std_radiance": 8.0311,
+      "pixel_count": 1138
+    },
+    {
+      "year": 2024,
+      "mean_radiance": 14.1441,
+      "median_radiance": 12.6542,
+      "min_radiance": 2.9431,
+      "max_radiance": 64.5515,
+      "std_radiance": 7.3352,
+      "pixel_count": 1234
+    }
+  ],
+  "trend": {
+    "annual_pct_change": 10.1,
+    "ci_lower": 8.9,
+    "ci_upper": 11.3,
+    "r_squared": 0.96,
+    "baseline_year": 2012,
+    "latest_year": 2024,
+    "baseline_radiance": 4.1,
+    "latest_radiance": 14.2,
+    "pct_change_total": 246.3
+  },
+  "classification": {
+    "alan_class": "high",
+    "percentile_tier": "Very High"
+  },
+  "neighbors": [
+    {
+      "district": "Satara",
+      "annual_pct_change": 6.1
+    },
+    {
+      "district": "Raigarh",
+      "annual_pct_change": 7.8
+    },
+    {
+      "district": "Ahmadnagar",
+      "annual_pct_change": 5.2
+    }
+  ],
+  "rankings": {
+    "annual_growth": 2,
+    "latest_radiance": 5,
+    "total_change": 2,
+    "total_districts": 36
+  }
+}

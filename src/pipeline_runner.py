@@ -825,6 +825,18 @@ Examples:
         dest="city_source",
         help="City locations source: 'config' (hand-picked) or 'census' (geocoded census towns)",
     )
+    parser.add_argument(
+        "--export-web",
+        action="store_true",
+        help="After the district pipeline completes, export a web-ready bundle "
+             "(districts.geojson, leaderboard.json, per-district JSON, meta.json) "
+             "to web-export/. Consumed by the astronera frontend at /viirs/maharashtra.",
+    )
+    parser.add_argument(
+        "--web-export-dir",
+        default="web-export",
+        help="Output directory for the web-ready bundle (default: web-export/).",
+    )
 
     # GIF assembly settings
     gif_group = parser.add_argument_group("GIF assembly settings")
@@ -968,6 +980,33 @@ def main():
 
         if pipeline_type == "district":
             result = run_district_pipeline(args, single_step=args.step)
+
+            # Optional: export web-ready bundle for the astronera frontend.
+            if getattr(args, "export_web", False) and not args.step:
+                try:
+                    from src.outputs.web_export import export_web_bundle
+                    from src.outputs.web_rasters import export_web_rasters
+                    dirs = get_entity_dirs(args.output_dir, "district")
+                    summary = export_web_bundle(
+                        csv_dir=dirs["csv"],
+                        shapefile_path=args.shapefile_path,
+                        out_dir=args.web_export_dir,
+                    )
+                    log.info("Web export: %s", summary)
+                    raster_summary = export_web_rasters(
+                        output_dir=args.output_dir,
+                        out_dir=args.web_export_dir,
+                    )
+                    log.info("Web rasters: %s", raster_summary)
+                    from src.outputs.web_animations import export_web_animations
+                    anim_summary = export_web_animations(
+                        output_dir=args.output_dir,
+                        out_dir=args.web_export_dir,
+                        shapefile_path=args.shapefile_path,
+                    )
+                    log.info("Web animations: %s", anim_summary)
+                except Exception as e:  # noqa: BLE001
+                    log.error("Web export failed: %s", e)
         elif pipeline_type in ("city", "site"):
             result = run_entity_pipeline(args, pipeline_type)
 

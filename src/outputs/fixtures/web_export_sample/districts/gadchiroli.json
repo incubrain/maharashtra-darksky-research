@@ -1,0 +1,154 @@
+{
+  "district": "Gadchiroli",
+  "slug": "gadchiroli",
+  "annual_series": [
+    {
+      "year": 2012,
+      "mean_radiance": 0.081,
+      "median_radiance": 0.0736,
+      "min_radiance": 0.0051,
+      "max_radiance": 0.2176,
+      "std_radiance": 0.0637,
+      "pixel_count": 5938
+    },
+    {
+      "year": 2013,
+      "mean_radiance": 0.085,
+      "median_radiance": 0.0803,
+      "min_radiance": 0.0157,
+      "max_radiance": 0.3203,
+      "std_radiance": 0.0671,
+      "pixel_count": 7758
+    },
+    {
+      "year": 2014,
+      "mean_radiance": 0.086,
+      "median_radiance": 0.0822,
+      "min_radiance": 0.0194,
+      "max_radiance": 0.6671,
+      "std_radiance": 0.0756,
+      "pixel_count": 8026
+    },
+    {
+      "year": 2015,
+      "mean_radiance": 0.094,
+      "median_radiance": 0.08,
+      "min_radiance": 0.0253,
+      "max_radiance": 0.6405,
+      "std_radiance": 0.0815,
+      "pixel_count": 7122
+    },
+    {
+      "year": 2016,
+      "mean_radiance": 0.0962,
+      "median_radiance": 0.0942,
+      "min_radiance": 0.009,
+      "max_radiance": 0.7279,
+      "std_radiance": 0.0566,
+      "pixel_count": 9747
+    },
+    {
+      "year": 2017,
+      "mean_radiance": 0.103,
+      "median_radiance": 0.0918,
+      "min_radiance": 0.0087,
+      "max_radiance": 0.4496,
+      "std_radiance": 0.0767,
+      "pixel_count": 3720
+    },
+    {
+      "year": 2018,
+      "mean_radiance": 0.1096,
+      "median_radiance": 0.1021,
+      "min_radiance": 0.0224,
+      "max_radiance": 0.4458,
+      "std_radiance": 0.0837,
+      "pixel_count": 1539
+    },
+    {
+      "year": 2019,
+      "mean_radiance": 0.115,
+      "median_radiance": 0.1075,
+      "min_radiance": 0.0319,
+      "max_radiance": 0.5689,
+      "std_radiance": 0.0884,
+      "pixel_count": 7745
+    },
+    {
+      "year": 2020,
+      "mean_radiance": 0.1125,
+      "median_radiance": 0.1071,
+      "min_radiance": 0.0139,
+      "max_radiance": 0.3875,
+      "std_radiance": 0.1006,
+      "pixel_count": 2009
+    },
+    {
+      "year": 2021,
+      "mean_radiance": 0.1266,
+      "median_radiance": 0.1095,
+      "min_radiance": 0.0182,
+      "max_radiance": 0.6894,
+      "std_radiance": 0.0552,
+      "pixel_count": 10577
+    },
+    {
+      "year": 2022,
+      "mean_radiance": 0.128,
+      "median_radiance": 0.119,
+      "min_radiance": 0.012,
+      "max_radiance": 0.8352,
+      "std_radiance": 0.0627,
+      "pixel_count": 5092
+    },
+    {
+      "year": 2023,
+      "mean_radiance": 0.1284,
+      "median_radiance": 0.1111,
+      "min_radiance": 0.0311,
+      "max_radiance": 0.9856,
+      "std_radiance": 0.0599,
+      "pixel_count": 4126
+    },
+    {
+      "year": 2024,
+      "mean_radiance": 0.1348,
+      "median_radiance": 0.1266,
+      "min_radiance": 0.0236,
+      "max_radiance": 0.5319,
+      "std_radiance": 0.114,
+      "pixel_count": 6044
+    }
+  ],
+  "trend": {
+    "annual_pct_change": 4.6,
+    "ci_lower": 3.5,
+    "ci_upper": 5.7,
+    "r_squared": 0.88,
+    "baseline_year": 2012,
+    "latest_year": 2024,
+    "baseline_radiance": 0.08,
+    "latest_radiance": 0.14,
+    "pct_change_total": 75.0
+  },
+  "classification": {
+    "alan_class": "low",
+    "percentile_tier": "Pristine"
+  },
+  "neighbors": [
+    {
+      "district": "Chandrapur",
+      "annual_pct_change": 5.9
+    },
+    {
+      "district": "Gondiya",
+      "annual_pct_change": 3.8
+    }
+  ],
+  "rankings": {
+    "annual_growth": 34,
+    "latest_radiance": 36,
+    "total_change": 34,
+    "total_districts": 36
+  }
+}

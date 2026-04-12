@@ -1,0 +1,79 @@
+{
+  "best_conserving": [
+    {
+      "rank": 1,
+      "district": "Gadchiroli",
+      "slug": "gadchiroli",
+      "latest_radiance": 0.14,
+      "annual_pct_change": 4.6,
+      "annual_pct_change_ci_lower": 3.5,
+      "annual_pct_change_ci_upper": 5.7,
+      "alan_class": "low",
+      "percentile_tier": "Pristine"
+    },
+    {
+      "rank": 2,
+      "district": "Mumbai Suburban",
+      "slug": "mumbai-suburban",
+      "latest_radiance": 59.7,
+      "annual_pct_change": 6.9,
+      "annual_pct_change_ci_lower": 5.8,
+      "annual_pct_change_ci_upper": 8.0,
+      "alan_class": "high",
+      "percentile_tier": "Very High"
+    },
+    {
+      "rank": 3,
+      "district": "Pune",
+      "slug": "pune",
+      "latest_radiance": 14.2,
+      "annual_pct_change": 10.1,
+      "annual_pct_change_ci_lower": 8.9,
+      "annual_pct_change_ci_upper": 11.3,
+      "alan_class": "high",
+      "percentile_tier": "Very High"
+    }
+  ],
+  "worst_conserving": [
+    {
+      "rank": 1,
+      "district": "Pune",
+      "slug": "pune",
+      "latest_radiance": 14.2,
+      "annual_pct_change": 10.1,
+      "annual_pct_change_ci_lower": 8.9,
+      "annual_pct_change_ci_upper": 11.3,
+      "alan_class": "high",
+      "percentile_tier": "Very High"
+    },
+    {
+      "rank": 2,
+      "district": "Mumbai Suburban",
+      "slug": "mumbai-suburban",
+      "latest_radiance": 59.7,
+      "annual_pct_change": 6.9,
+      "annual_pct_change_ci_lower": 5.8,
+      "annual_pct_change_ci_upper": 8.0,
+      "alan_class": "high",
+      "percentile_tier": "Very High"
+    },
+    {
+      "rank": 3,
+      "district": "Gadchiroli",
+      "slug": "gadchiroli",
+      "latest_radiance": 0.14,
+      "annual_pct_change": 4.6,
+      "annual_pct_change_ci_lower": 3.5,
+      "annual_pct_change_ci_upper": 5.7,
+      "alan_class": "low",
+      "percentile_tier": "Pristine"
+    }
+  ],
+  "generated_at": "2026-04-12T00:00:00Z",
+  "data_years": [
+    2012,
+    2024
+  ],
+  "total_districts": 36,
+  "note": "Fixture data \u2014 only 3 districts present. Real export will include all 36."
+}

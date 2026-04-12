@@ -1,0 +1,154 @@
+{
+  "district": "Mumbai Suburban",
+  "slug": "mumbai-suburban",
+  "annual_series": [
+    {
+      "year": 2012,
+      "mean_radiance": 27.799,
+      "median_radiance": 24.4719,
+      "min_radiance": 5.8043,
+      "max_radiance": 154.0378,
+      "std_radiance": 18.0253,
+      "pixel_count": 1678
+    },
+    {
+      "year": 2013,
+      "mean_radiance": 29.9973,
+      "median_radiance": 26.0017,
+      "min_radiance": 7.9651,
+      "max_radiance": 109.6977,
+      "std_radiance": 14.8781,
+      "pixel_count": 2967
+    },
+    {
+      "year": 2014,
+      "mean_radiance": 31.5168,
+      "median_radiance": 27.683,
+      "min_radiance": 7.4026,
+      "max_radiance": 123.039,
+      "std_radiance": 19.7278,
+      "pixel_count": 6917
+    },
+    {
+      "year": 2015,
+      "mean_radiance": 35.4139,
+      "median_radiance": 30.8711,
+      "min_radiance": 6.0373,
+      "max_radiance": 95.7957,
+      "std_radiance": 23.4262,
+      "pixel_count": 3381
+    },
+    {
+      "year": 2016,
+      "mean_radiance": 37.2752,
+      "median_radiance": 35.1733,
+      "min_radiance": 10.3928,
+      "max_radiance": 276.2325,
+      "std_radiance": 15.5902,
+      "pixel_count": 8144
+    },
+    {
+      "year": 2017,
+      "mean_radiance": 37.6897,
+      "median_radiance": 35.5626,
+      "min_radiance": 7.1006,
+      "max_radiance": 98.9681,
+      "std_radiance": 29.8039,
+      "pixel_count": 8405
+    },
+    {
+      "year": 2018,
+      "mean_radiance": 39.745,
+      "median_radiance": 34.0459,
+      "min_radiance": 5.2572,
+      "max_radiance": 245.0922,
+      "std_radiance": 28.6068,
+      "pixel_count": 1285
+    },
+    {
+      "year": 2019,
+      "mean_radiance": 42.5085,
+      "median_radiance": 38.8399,
+      "min_radiance": 11.7848,
+      "max_radiance": 338.8763,
+      "std_radiance": 24.3138,
+      "pixel_count": 1450
+    },
+    {
+      "year": 2020,
+      "mean_radiance": 47.6288,
+      "median_radiance": 45.6377,
+      "min_radiance": 12.5437,
+      "max_radiance": 160.5853,
+      "std_radiance": 21.087,
+      "pixel_count": 6974
+    },
+    {
+      "year": 2021,
+      "mean_radiance": 48.0834,
+      "median_radiance": 43.4167,
+      "min_radiance": 7.8491,
+      "max_radiance": 213.781,
+      "std_radiance": 19.5923,
+      "pixel_count": 1824
+    },
+    {
+      "year": 2022,
+      "mean_radiance": 54.6904,
+      "median_radiance": 52.9551,
+      "min_radiance": 4.9372,
+      "max_radiance": 199.2838,
+      "std_radiance": 43.5007,
+      "pixel_count": 8845
+    },
+    {
+      "year": 2023,
+      "mean_radiance": 57.2721,
+      "median_radiance": 51.981,
+      "min_radiance": 4.3281,
+      "max_radiance": 250.4385,
+      "std_radiance": 35.4023,
+      "pixel_count": 7570
+    },
+    {
+      "year": 2024,
+      "mean_radiance": 60.2448,
+      "median_radiance": 56.5905,
+      "min_radiance": 13.982,
+      "max_radiance": 446.9252,
+      "std_radiance": 53.8323,
+      "pixel_count": 5488
+    }
+  ],
+  "trend": {
+    "annual_pct_change": 6.9,
+    "ci_lower": 5.8,
+    "ci_upper": 8.0,
+    "r_squared": 0.97,
+    "baseline_year": 2012,
+    "latest_year": 2024,
+    "baseline_radiance": 28.4,
+    "latest_radiance": 59.7,
+    "pct_change_total": 110.2
+  },
+  "classification": {
+    "alan_class": "high",
+    "percentile_tier": "Very High"
+  },
+  "neighbors": [
+    {
+      "district": "Mumbai",
+      "annual_pct_change": 5.8
+    },
+    {
+      "district": "Thane",
+      "annual_pct_change": 7.4
+    }
+  ],
+  "rankings": {
+    "annual_growth": 6,
+    "latest_radiance": 1,
+    "total_change": 4,
+    "total_districts": 36
+  }
+}
